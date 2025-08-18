@@ -194,7 +194,8 @@ function validateSAIDFormat(idNumber) {
 function extractIdInfo(idNumber) {
   const cleanId = idNumber.replace(/[\s-]/g, '');
   
-  if (!validateSAIDFormat(cleanId)) {
+  // Basic validation - just check length and that it's numeric
+  if (!/^\d{13}$/.test(cleanId)) {
     return null;
   }
 
@@ -204,8 +205,13 @@ function extractIdInfo(idNumber) {
   const genderCode = parseInt(cleanId.substring(6, 10));
   const citizenshipCode = parseInt(cleanId.substring(10, 11));
 
-  // Determine century (assumes current year is 2024)
-  const fullYear = year < 25 ? 2000 + year : 1900 + year;
+  // Basic date validation
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  // Determine century (assumes current year is 2025)
+  const fullYear = year < 26 ? 2000 + year : 1900 + year;
   
   return {
     dateOfBirth: `${fullYear}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`,
@@ -231,7 +237,13 @@ async function mockHomeAffairsAPI(idNumber) {
   if (mockRecord) {
     return {
       success: true,
-      data: mockRecord,
+      data: {
+        idNumber: cleanId,
+        isValid: true,
+        isRegistered: false,
+        homeAffairsData: mockRecord,
+        extractedInfo: extractIdInfo(cleanId)
+      },
       message: 'ID found in Home Affairs database'
     };
   }
@@ -367,14 +379,20 @@ async function realHomeAffairsAPI(idNumber) {
         success: true,
         data: {
           idNumber: idNumber,
-          firstName: data.personalInfo?.firstName || data.firstName,
-          lastName: data.personalInfo?.lastName || data.lastName,
-          dateOfBirth: data.personalInfo?.dateOfBirth || data.dateOfBirth,
-          gender: data.personalInfo?.gender || data.gender,
-          citizenship: data.personalInfo?.nationality || 'South African',
-          isValid: data.kycStatus === 'Verified' || data.status === 'Active',
-          isAlive: true,
-          maritalStatus: data.personalInfo?.maritalStatus || 'Unknown'
+          isValid: true,
+          isRegistered: false,
+          homeAffairsData: {
+            idNumber: idNumber,
+            firstName: data.personalInfo?.firstName || data.firstName,
+            lastName: data.personalInfo?.lastName || data.lastName,
+            dateOfBirth: data.personalInfo?.dateOfBirth || data.dateOfBirth,
+            gender: data.personalInfo?.gender || data.gender,
+            citizenship: data.personalInfo?.nationality || 'South African',
+            isValid: data.kycStatus === 'Verified' || data.status === 'Active',
+            isAlive: true,
+            maritalStatus: data.personalInfo?.maritalStatus || 'Unknown'
+          },
+          extractedInfo: extractIdInfo(idNumber)
         },
         message: 'ID verification successful via your API',
         source: 'cash-dnr-api',
@@ -435,8 +453,8 @@ async function verifyIdWithHomeAffairs(idNumber) {
 
     const cleanId = idNumber.replace(/[\s-]/g, '');
 
-    // Basic format validation
-    if (!validateSAIDFormat(cleanId)) {
+    // Basic length and numeric validation
+    if (!/^\d{13}$/.test(cleanId)) {
       return {
         success: false,
         message: 'Invalid South African ID number format',
@@ -458,16 +476,47 @@ async function verifyIdWithHomeAffairs(idNumber) {
     let apiResponse;
     if (useMockMode) {
       console.log('🔍 Using Home Affairs Mock API for ID verification');
+      // For mock mode, validate checksum
+      if (!validateSAIDFormat(cleanId)) {
+        return {
+          success: false,
+          message: 'Invalid South African ID number format',
+          data: null,
+          validationDetails: {
+            formatValid: false,
+            length: cleanId.length,
+            expected: 13
+          }
+        };
+      }
       apiResponse = await mockHomeAffairsAPI(cleanId);
     } else {
       console.log('🔍 Using Real Home Affairs API for ID verification');
+      // For real API, skip checksum validation and let your API decide
       apiResponse = await realHomeAffairsAPI(cleanId);
       
       // If real API fails, fallback to mock for development
       if (!apiResponse.success && process.env.NODE_ENV === 'development') {
         console.log('⚠️ Real API failed, falling back to mock data for development');
-        apiResponse = await mockHomeAffairsAPI(cleanId);
-        apiResponse.fallbackUsed = true;
+        // Validate checksum for mock fallback
+        if (validateSAIDFormat(cleanId)) {
+          apiResponse = await mockHomeAffairsAPI(cleanId);
+          apiResponse.fallbackUsed = true;
+        } else {
+          // Even fallback fails due to invalid checksum
+          return {
+            success: false,
+            message: 'ID number not found in Home Affairs database',
+            data: null,
+            validationDetails: {
+              formatValid: false,
+              length: cleanId.length,
+              expected: 13,
+              note: 'Invalid checksum for mock fallback'
+            },
+            fallbackUsed: true
+          };
+        }
       }
     }
 

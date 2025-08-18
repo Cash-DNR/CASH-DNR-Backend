@@ -8,191 +8,7 @@ import { verifyIdWithHomeAffairs, validateRegistrationMatch } from '../services/
 
 const router = express.Router();
 
-/**
- * @route   POST /api/auth/register
- * @desc    Register a new user
- * @access  Public
- */
-router.post('/register', [
-  body('username')
-    .isLength({ min: 3 })
-    .withMessage('Username must be at least 3 characters long'),
-  body('email')
-    .isEmail()
-    .normalizeEmail()
-    .withMessage('Please provide a valid email address'),
-  body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long'),
-  body('firstName')
-    .isLength({ min: 1 })
-    .withMessage('First name is required'),
-  body('lastName')
-    .isLength({ min: 1 })
-    .withMessage('Last name is required'),
-  body('idNumber')
-    .optional()
-    .isLength({ min: 13, max: 13 })
-    .withMessage('South African ID number must be exactly 13 digits')
-    .isNumeric()
-    .withMessage('ID number must contain only numbers')
-], async (req, res) => {
-  try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
 
-    const { username, email, password, firstName, lastName, idNumber } = req.body;
-
-    // Home Affairs ID verification if ID number is provided
-    let homeAffairsData = null;
-    let homeAffairsVerified = false;
-    
-    if (idNumber) {
-      console.log(`🔍 Verifying ID number: ${idNumber}`);
-      
-      // Check if ID number is already registered
-      const existingIdUser = await User.findOne({ where: { id_number: idNumber } });
-      if (existingIdUser) {
-        return res.status(400).json({
-          success: false,
-          message: 'This ID number is already registered'
-        });
-      }
-
-      // Verify with Home Affairs
-      const idVerificationResult = await verifyIdWithHomeAffairs(idNumber);
-      
-      if (!idVerificationResult.success) {
-        // If ID validation is required, reject registration
-        if (process.env.ID_VALIDATION_REQUIRED === 'true') {
-          return res.status(400).json({
-            success: false,
-            message: idVerificationResult.message,
-            details: idVerificationResult.validationDetails,
-            idVerification: idVerificationResult
-          });
-        } else {
-          // Log warning but allow registration
-          console.warn('⚠️ ID verification failed but validation not required:', idVerificationResult.message);
-        }
-      } else {
-        homeAffairsData = idVerificationResult.data;
-        homeAffairsVerified = true;
-
-        // Validate that registration data matches Home Affairs data
-        const matchValidation = validateRegistrationMatch(
-          { firstName, lastName },
-          homeAffairsData
-        );
-
-        if (!matchValidation.isValid) {
-          return res.status(400).json({
-            success: false,
-            message: 'Registration details do not match Home Affairs records',
-            errors: matchValidation.errors,
-            homeAffairsData: {
-              firstName: homeAffairsData?.firstName,
-              lastName: homeAffairsData?.lastName,
-              dateOfBirth: homeAffairsData?.dateOfBirth,
-              gender: homeAffairsData?.gender
-            }
-          });
-        }
-
-        console.log('✅ Home Affairs verification successful');
-      }
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [
-          { email },
-          { username }
-        ]
-      }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User with this email or username already exists'
-      });
-    }
-
-    // Prepare user data
-    const userData = {
-      username,
-      email,
-      password_hash: password, // Will be hashed by the model hook
-      first_name: firstName,
-      last_name: lastName,
-      home_affairs_verified: homeAffairsVerified
-    };
-
-    // Add Home Affairs data if available
-    if (homeAffairsData) {
-      userData.id_number = idNumber;
-      userData.date_of_birth = homeAffairsData.dateOfBirth;
-      userData.gender = homeAffairsData.gender;
-    }
-
-    // Create new user
-    const user = await User.create(userData);
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user.id,
-        email: user.email,
-        username: user.username
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: homeAffairsVerified 
-        ? 'User registered successfully with Home Affairs verification' 
-        : 'User registered successfully',
-      data: {
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          firstName: user.first_name,
-          lastName: user.last_name,
-          idNumber: user.id_number,
-          dateOfBirth: user.date_of_birth,
-          gender: user.gender,
-          homeAffairsVerified: user.home_affairs_verified,
-          isActive: user.is_active,
-          isVerified: user.is_verified
-        },
-        token,
-        homeAffairsVerification: homeAffairsVerified ? {
-          verified: true,
-          source: homeAffairsData ? 'home-affairs-api' : 'mock-data'
-        } : null
-      }
-    });
-
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
 
 /**
  * @route   POST /api/auth/login
@@ -336,6 +152,177 @@ router.post('/verify-id', [
     res.status(500).json({
       success: false,
       message: 'Internal server error during ID verification'
+    });
+  }
+});
+
+/**
+ * Main registration - only requires email, idNumber, password
+ * Personal details are fetched from Home Affairs API
+ */
+router.post('/register', [
+  body('email')
+    .isEmail()
+    .withMessage('Valid email is required'),
+  body('password')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
+  body('idNumber')
+    .isLength({ min: 13, max: 13 })
+    .withMessage('South African ID number must be exactly 13 digits')
+    .isNumeric()
+    .withMessage('ID number must contain only numbers')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, password, idNumber } = req.body;
+
+    console.log(`🔍 Starting registration for ID: ${idNumber}`);
+
+    // Check if email is already registered
+    const existingEmailUser = await User.findOne({ where: { email } });
+    if (existingEmailUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'This email is already registered'
+      });
+    }
+
+    // Check if ID number is already registered
+    const existingIdUser = await User.findOne({ where: { id_number: idNumber } });
+    if (existingIdUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'This ID number is already registered'
+      });
+    }
+
+    // Verify ID with Home Affairs API and fetch personal details
+    console.log(`🔍 Verifying ID number with Home Affairs API: ${idNumber}`);
+    const idVerificationResult = await verifyIdWithHomeAffairs(idNumber);
+    
+    if (!idVerificationResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID number not found in Home Affairs database',
+        details: idVerificationResult.message,
+        validationDetails: idVerificationResult.validationDetails
+      });
+    }
+
+    // Extract personal details from Home Affairs data
+    const homeAffairsData = idVerificationResult.data?.homeAffairsData;
+    if (!homeAffairsData || !homeAffairsData.firstName || !homeAffairsData.lastName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Unable to retrieve complete personal details from Home Affairs',
+        debug: {
+          hasData: !!idVerificationResult.data,
+          hasHomeAffairsData: !!homeAffairsData,
+          dataKeys: idVerificationResult.data ? Object.keys(idVerificationResult.data) : [],
+          homeAffairsDataKeys: homeAffairsData ? Object.keys(homeAffairsData) : []
+        }
+      });
+    }
+
+    console.log(`✅ Home Affairs verification successful for: ${homeAffairsData.firstName} ${homeAffairsData.lastName}`);
+
+    // Generate username from first name and last name
+    const baseUsername = `${homeAffairsData.firstName.toLowerCase()}.${homeAffairsData.lastName.toLowerCase()}`;
+    let username = baseUsername;
+    let counter = 1;
+    
+    // Ensure username is unique
+    while (await User.findOne({ where: { username } })) {
+      username = `${baseUsername}${counter}`;
+      counter++;
+    }
+
+    // Hash password
+    const saltRounds = 12;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Create user with Home Affairs data
+    const newUser = await User.create({
+      username,
+      email,
+      password_hash: passwordHash,
+      first_name: homeAffairsData.firstName,
+      last_name: homeAffairsData.lastName,
+      id_number: idNumber,
+      date_of_birth: homeAffairsData.dateOfBirth,
+      gender: homeAffairsData.gender,
+      home_affairs_verified: true,
+      is_verified: false,
+      is_active: true
+    });
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: newUser.id, 
+        email: newUser.email, 
+        username: newUser.username 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Return success response with user data (excluding password)
+    const userData = {
+      id: newUser.id,
+      username: newUser.username,
+      email: newUser.email,
+      firstName: newUser.first_name,
+      lastName: newUser.last_name,
+      idNumber: newUser.id_number,
+      dateOfBirth: newUser.date_of_birth,
+      gender: newUser.gender,
+      homeAffairsVerified: newUser.home_affairs_verified,
+      isActive: newUser.is_active,
+      isVerified: newUser.is_verified
+    };
+
+    console.log(`✅ User registered successfully: ${userData.username}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'User registered successfully with Home Affairs verification',
+      data: {
+        user: userData,
+        token,
+        homeAffairsVerification: {
+          verified: true,
+          source: 'home-affairs-api',
+          personalDetails: {
+            firstName: homeAffairsData.firstName,
+            lastName: homeAffairsData.lastName,
+            dateOfBirth: homeAffairsData.dateOfBirth,
+            gender: homeAffairsData.gender,
+            citizenship: homeAffairsData.citizenship,
+            maritalStatus: homeAffairsData.maritalStatus
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Registration error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during registration',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
