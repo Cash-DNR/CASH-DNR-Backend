@@ -70,8 +70,15 @@ async function startServer() {
     console.log('✅ Database connection established successfully.');
     
     // Sync database
-    await sequelize.sync();
-    console.log('✅ Database models synchronized.');
+    const environment = (process.env.NODE_ENV || 'development').trim().toLowerCase();
+    if (environment === 'development') {
+      // Force sync in development to update table structure
+      await sequelize.sync({ alter: true });
+      console.log('✅ Database models synchronized with table alterations.');
+    } else {
+      await sequelize.sync();
+      console.log('✅ Database models synchronized.');
+    }
     
     // Start the server
     app.listen(PORT, () => {

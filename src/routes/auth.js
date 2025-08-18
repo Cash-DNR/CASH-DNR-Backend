@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Op } from 'sequelize';
 import User from '../models/User.js';
+import { verifyIdWithHomeAffairs, validateRegistrationMatch } from '../services/homeAffairs.js';
 
 const router = express.Router();
 
@@ -28,7 +29,13 @@ router.post('/register', [
     .withMessage('First name is required'),
   body('lastName')
     .isLength({ min: 1 })
-    .withMessage('Last name is required')
+    .withMessage('Last name is required'),
+  body('idNumber')
+    .optional()
+    .isLength({ min: 13, max: 13 })
+    .withMessage('South African ID number must be exactly 13 digits')
+    .isNumeric()
+    .withMessage('ID number must contain only numbers')
 ], async (req, res) => {
   try {
     // Check for validation errors
@@ -41,7 +48,67 @@ router.post('/register', [
       });
     }
 
-    const { username, email, password, firstName, lastName } = req.body;
+    const { username, email, password, firstName, lastName, idNumber } = req.body;
+
+    // Home Affairs ID verification if ID number is provided
+    let homeAffairsData = null;
+    let homeAffairsVerified = false;
+    
+    if (idNumber) {
+      console.log(`🔍 Verifying ID number: ${idNumber}`);
+      
+      // Check if ID number is already registered
+      const existingIdUser = await User.findOne({ where: { id_number: idNumber } });
+      if (existingIdUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'This ID number is already registered'
+        });
+      }
+
+      // Verify with Home Affairs
+      const idVerificationResult = await verifyIdWithHomeAffairs(idNumber);
+      
+      if (!idVerificationResult.success) {
+        // If ID validation is required, reject registration
+        if (process.env.ID_VALIDATION_REQUIRED === 'true') {
+          return res.status(400).json({
+            success: false,
+            message: idVerificationResult.message,
+            details: idVerificationResult.validationDetails,
+            idVerification: idVerificationResult
+          });
+        } else {
+          // Log warning but allow registration
+          console.warn('⚠️ ID verification failed but validation not required:', idVerificationResult.message);
+        }
+      } else {
+        homeAffairsData = idVerificationResult.data;
+        homeAffairsVerified = true;
+
+        // Validate that registration data matches Home Affairs data
+        const matchValidation = validateRegistrationMatch(
+          { firstName, lastName },
+          homeAffairsData
+        );
+
+        if (!matchValidation.isValid) {
+          return res.status(400).json({
+            success: false,
+            message: 'Registration details do not match Home Affairs records',
+            errors: matchValidation.errors,
+            homeAffairsData: {
+              firstName: homeAffairsData?.firstName,
+              lastName: homeAffairsData?.lastName,
+              dateOfBirth: homeAffairsData?.dateOfBirth,
+              gender: homeAffairsData?.gender
+            }
+          });
+        }
+
+        console.log('✅ Home Affairs verification successful');
+      }
+    }
 
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -60,14 +127,25 @@ router.post('/register', [
       });
     }
 
-    // Create new user
-    const user = await User.create({
+    // Prepare user data
+    const userData = {
       username,
       email,
       password_hash: password, // Will be hashed by the model hook
       first_name: firstName,
-      last_name: lastName
-    });
+      last_name: lastName,
+      home_affairs_verified: homeAffairsVerified
+    };
+
+    // Add Home Affairs data if available
+    if (homeAffairsData) {
+      userData.id_number = idNumber;
+      userData.date_of_birth = homeAffairsData.dateOfBirth;
+      userData.gender = homeAffairsData.gender;
+    }
+
+    // Create new user
+    const user = await User.create(userData);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -82,7 +160,9 @@ router.post('/register', [
 
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: homeAffairsVerified 
+        ? 'User registered successfully with Home Affairs verification' 
+        : 'User registered successfully',
       data: {
         user: {
           id: user.id,
@@ -90,10 +170,18 @@ router.post('/register', [
           email: user.email,
           firstName: user.first_name,
           lastName: user.last_name,
+          idNumber: user.id_number,
+          dateOfBirth: user.date_of_birth,
+          gender: user.gender,
+          homeAffairsVerified: user.home_affairs_verified,
           isActive: user.is_active,
           isVerified: user.is_verified
         },
-        token
+        token,
+        homeAffairsVerification: homeAffairsVerified ? {
+          verified: true,
+          source: homeAffairsData ? 'home-affairs-api' : 'mock-data'
+        } : null
       }
     });
 
@@ -192,6 +280,62 @@ router.post('/login', [
     res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/verify-id
+ * @desc    Verify South African ID with Home Affairs
+ * @access  Public
+ */
+router.post('/verify-id', [
+  body('idNumber')
+    .isLength({ min: 13, max: 13 })
+    .withMessage('South African ID number must be exactly 13 digits')
+    .isNumeric()
+    .withMessage('ID number must contain only numbers')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { idNumber } = req.body;
+
+    console.log(`🔍 ID verification request for: ${idNumber}`);
+
+    // Verify with Home Affairs
+    const verificationResult = await verifyIdWithHomeAffairs(idNumber);
+
+    // Check if ID is already registered
+    const existingUser = await User.findOne({ where: { id_number: idNumber } });
+    
+    res.json({
+      success: verificationResult.success,
+      message: verificationResult.message,
+      data: {
+        idNumber,
+        isValid: verificationResult.success,
+        isRegistered: !!existingUser,
+        homeAffairsData: verificationResult.data,
+        extractedInfo: verificationResult.extractedInfo,
+        validationDetails: verificationResult.validationDetails,
+        fallbackUsed: verificationResult.fallbackUsed || false
+      }
+    });
+
+  } catch (error) {
+    console.error('ID verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during ID verification'
     });
   }
 });

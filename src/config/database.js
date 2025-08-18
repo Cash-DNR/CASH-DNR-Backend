@@ -4,13 +4,16 @@ import { config } from 'dotenv';
 // Load environment variables
 config();
 
-// Get current environment
-const isDevelopment = process.env.NODE_ENV === 'development';
-const isProduction = process.env.NODE_ENV === 'production';
+// Get current environment with trimming
+const environment = (process.env.NODE_ENV || 'development').trim().toLowerCase();
+const isDevelopment = environment === 'development';
+const isProduction = environment === 'production';
 
-// Database configuration based on environment
+// Function to get database configuration based on environment
 const getDatabaseConfig = () => {
-  if (isDevelopment) {
+  const environment = (process.env.NODE_ENV || 'development').trim().toLowerCase();
+  
+  if (environment === 'development') {
     return {
       dialect: 'postgres',
       host: process.env.DEV_DB_HOST,
@@ -61,7 +64,7 @@ const getDatabaseConfig = () => {
   } else {
     // Throw error if environment is not properly set
     throw new Error(
-      `Invalid NODE_ENV: "${process.env.NODE_ENV}". Must be either "development" or "production". ` +
+      `Invalid NODE_ENV: "${environment}". Must be either "development" or "production". ` +
       'Please set NODE_ENV in your environment variables.'
     );
   }

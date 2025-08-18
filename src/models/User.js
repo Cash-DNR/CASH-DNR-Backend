@@ -49,6 +49,27 @@ User.init({
       notEmpty: true
     }
   },
+  id_number: {
+    type: DataTypes.STRING(13),
+    allowNull: true, // Make optional for now
+    unique: true,
+    validate: {
+      len: [13, 13],
+      isNumeric: true
+    }
+  },
+  date_of_birth: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  gender: {
+    type: DataTypes.ENUM('Male', 'Female'),
+    allowNull: true
+  },
+  home_affairs_verified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
   is_verified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
