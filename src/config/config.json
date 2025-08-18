@@ -1,0 +1,25 @@
+{
+  "development": {
+    "username": "postgres",
+    "password": "Prince@082",
+    "database": "CASH-DNR",
+    "host": "localhost",
+    "port": 5432,
+    "dialect": "postgres"
+   
+  },
+  "production": {
+    "username": "cash_dnr_user",
+    "password": "QKEyLJPdAMKeosylwpHxHnPY05SFSUNl",
+    "database": "cash_dnr",
+    "host": "dpg-d2hhdpruibrs73fb18g0-a",
+    "port": 5432,
+    "dialect": "postgres",
+    "dialectOptions": {
+      "ssl": {
+        "require": true,
+        "rejectUnauthorized": false
+      }
+    }
+  }
+}
