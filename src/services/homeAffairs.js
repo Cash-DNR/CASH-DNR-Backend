@@ -7,6 +7,17 @@
 // For Node.js < 18, uncomment the line below:
 // import fetch from 'node-fetch';
 
+/**
+ * Generate a South African tax number
+ * Format: TAX-XXXXXXXXX (TAX- prefix followed by 9 digits)
+ */
+export function generateTaxNumber(idNumber) {
+  // Use ID number as base and generate unique tax number
+  const base = idNumber.substring(0, 9);
+  const taxNumber = `TAX-${base}`;
+  return taxNumber;
+}
+
 // Mock database of valid South African IDs with personal information
 const mockHomeAffairsData = [
   {

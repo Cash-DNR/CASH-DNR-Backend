@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Op } from 'sequelize';
 import User from '../models/User.js';
-import { verifyIdWithHomeAffairs, validateRegistrationMatch } from '../services/homeAffairs.js';
+import { verifyIdWithHomeAffairs, validateRegistrationMatch, generateTaxNumber } from '../services/homeAffairs.js';
 
 const router = express.Router();
 
@@ -173,7 +173,32 @@ router.post('/register', [
     .isLength({ min: 13, max: 13 })
     .withMessage('South African ID number must be exactly 13 digits')
     .isNumeric()
-    .withMessage('ID number must contain only numbers')
+    .withMessage('ID number must contain only numbers'),
+  body('homeAddress')
+    .optional()
+    .custom((value) => {
+      if (value) {
+        if (typeof value !== 'object') {
+          throw new Error('Home address must be an object');
+        }
+        const requiredFields = ['streetAddress', 'town', 'city', 'province', 'postalCode'];
+        const missingFields = requiredFields.filter(field => !value[field] || value[field].trim() === '');
+        if (missingFields.length > 0) {
+          throw new Error(`Missing required address fields: ${missingFields.join(', ')}`);
+        }
+        // Validate field lengths
+        if (value.streetAddress.length > 100) throw new Error('Street address must be less than 100 characters');
+        if (value.town.length > 50) throw new Error('Town must be less than 50 characters');
+        if (value.city.length > 50) throw new Error('City must be less than 50 characters');
+        if (value.province.length > 50) throw new Error('Province must be less than 50 characters');
+        if (value.postalCode.length > 10) throw new Error('Postal code must be less than 10 characters');
+      }
+      return true;
+    }),
+  body('phoneNumber')
+    .optional()
+    .isLength({ min: 10, max: 20 })
+    .withMessage('Phone number must be between 10 and 20 characters')
 ], async (req, res) => {
   try {
     // Check for validation errors
@@ -186,7 +211,7 @@ router.post('/register', [
       });
     }
 
-    const { email, password, idNumber } = req.body;
+    const { email, password, idNumber, homeAddress, phoneNumber } = req.body;
 
     console.log(`🔍 Starting registration for ID: ${idNumber}`);
 
@@ -212,6 +237,8 @@ router.post('/register', [
     console.log(`🔍 Verifying ID number with Home Affairs API: ${idNumber}`);
     const idVerificationResult = await verifyIdWithHomeAffairs(idNumber);
     
+    console.log('🔍 Verification result:', JSON.stringify(idVerificationResult, null, 2));
+    
     if (!idVerificationResult.success) {
       return res.status(400).json({
         success: false,
@@ -223,6 +250,7 @@ router.post('/register', [
 
     // Extract personal details from Home Affairs data
     const homeAffairsData = idVerificationResult.data?.homeAffairsData;
+    console.log('🔍 Home Affairs data extracted:', JSON.stringify(homeAffairsData, null, 2));
     if (!homeAffairsData || !homeAffairsData.firstName || !homeAffairsData.lastName) {
       return res.status(400).json({
         success: false,
@@ -253,6 +281,15 @@ router.post('/register', [
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
+    // Check if user already has a tax number from Home Affairs data, if not generate one
+    let taxNumber = homeAffairsData.taxNumber || homeAffairsData.taxId;
+    if (!taxNumber) {
+      taxNumber = generateTaxNumber(idNumber);
+      console.log(`🔢 Generated tax number: ${taxNumber}`);
+    } else {
+      console.log(`✅ Using existing tax number from Home Affairs: ${taxNumber}`);
+    }
+
     // Create user with Home Affairs data
     const newUser = await User.create({
       username,
@@ -263,6 +300,9 @@ router.post('/register', [
       id_number: idNumber,
       date_of_birth: homeAffairsData.dateOfBirth,
       gender: homeAffairsData.gender,
+      tax_number: taxNumber,
+      home_address: homeAddress || null,
+      phone_number: phoneNumber || null,
       home_affairs_verified: true,
       is_verified: false,
       is_active: true
@@ -289,6 +329,9 @@ router.post('/register', [
       idNumber: newUser.id_number,
       dateOfBirth: newUser.date_of_birth,
       gender: newUser.gender,
+      taxNumber: newUser.tax_number,
+      homeAddress: newUser.home_address,
+      phoneNumber: newUser.phone_number,
       homeAffairsVerified: newUser.home_affairs_verified,
       isActive: newUser.is_active,
       isVerified: newUser.is_verified
@@ -296,12 +339,26 @@ router.post('/register', [
 
     console.log(`✅ User registered successfully: ${userData.username}`);
 
+    // Check if additional information is needed
+    const needsAdditionalInfo = !homeAddress || !phoneNumber;
+    let registrationMessage = 'User registered successfully with Home Affairs verification';
+    
+    if (needsAdditionalInfo) {
+      registrationMessage += '. Please provide home address and phone number to complete your profile.';
+    }
+
     res.status(201).json({
       success: true,
-      message: 'User registered successfully with Home Affairs verification',
+      message: registrationMessage,
       data: {
         user: userData,
         token,
+        registrationComplete: !needsAdditionalInfo,
+        missingInfo: {
+          homeAddress: !homeAddress,
+          phoneNumber: !phoneNumber
+        },
+        taxNumberGenerated: !homeAffairsData.taxNumber && !homeAffairsData.taxId,
         homeAffairsVerification: {
           verified: true,
           source: 'home-affairs-api',
@@ -311,7 +368,8 @@ router.post('/register', [
             dateOfBirth: homeAffairsData.dateOfBirth,
             gender: homeAffairsData.gender,
             citizenship: homeAffairsData.citizenship,
-            maritalStatus: homeAffairsData.maritalStatus
+            maritalStatus: homeAffairsData.maritalStatus,
+            taxNumber: taxNumber
           }
         }
       }
@@ -322,6 +380,117 @@ router.post('/register', [
     res.status(500).json({
       success: false,
       message: 'Internal server error during registration',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * @route   PUT /api/auth/complete-profile
+ * @desc    Complete user profile with home address and phone number
+ * @access  Private (requires JWT token)
+ */
+router.put('/complete-profile', [
+  body('homeAddress')
+    .custom((value) => {
+      if (typeof value !== 'object') {
+        throw new Error('Home address must be an object');
+      }
+      const requiredFields = ['streetAddress', 'town', 'city', 'province', 'postalCode'];
+      const missingFields = requiredFields.filter(field => !value[field] || value[field].trim() === '');
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required address fields: ${missingFields.join(', ')}`);
+      }
+      // Validate field lengths
+      if (value.streetAddress.length > 100) throw new Error('Street address must be less than 100 characters');
+      if (value.town.length > 50) throw new Error('Town must be less than 50 characters');
+      if (value.city.length > 50) throw new Error('City must be less than 50 characters');
+      if (value.province.length > 50) throw new Error('Province must be less than 50 characters');
+      if (value.postalCode.length > 10) throw new Error('Postal code must be less than 10 characters');
+      return true;
+    }),
+  body('phoneNumber')
+    .isLength({ min: 10, max: 20 })
+    .withMessage('Phone number must be between 10 and 20 characters')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { homeAddress, phoneNumber } = req.body;
+    
+    // Extract user ID from JWT token (you'll need to add auth middleware)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authorization token required'
+      });
+    }
+
+    const token = authHeader.substring(7);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+
+    // Find and update user
+    const user = await User.findByPk(decoded.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Update user profile
+    await user.update({
+      home_address: homeAddress,
+      phone_number: phoneNumber
+    });
+
+    console.log(`✅ Profile completed for user: ${user.username}`);
+
+    res.json({
+      success: true,
+      message: 'Profile completed successfully',
+      data: {
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          idNumber: user.id_number,
+          dateOfBirth: user.date_of_birth,
+          gender: user.gender,
+          taxNumber: user.tax_number,
+          homeAddress: user.home_address,
+          phoneNumber: user.phone_number,
+          homeAffairsVerified: user.home_affairs_verified,
+          isActive: user.is_active,
+          isVerified: user.is_verified
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Profile completion error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during profile completion',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

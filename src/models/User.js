@@ -66,6 +66,49 @@ User.init({
     type: DataTypes.ENUM('Male', 'Female'),
     allowNull: true
   },
+  tax_number: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    unique: true,
+    validate: {
+      len: [1, 20]
+    }
+  },
+  home_address: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    get() {
+      const rawValue = this.getDataValue('home_address');
+      if (!rawValue) return null;
+      try {
+        return typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
+      } catch {
+        return null;
+      }
+    },
+    set(value) {
+      if (value && typeof value === 'object') {
+        // Validate structure
+        const requiredFields = ['streetAddress', 'town', 'city', 'province', 'postalCode'];
+        const missingFields = requiredFields.filter(field => !value[field] || value[field].trim() === '');
+        if (missingFields.length > 0) {
+          throw new Error(`Missing required address fields: ${missingFields.join(', ')}`);
+        }
+        this.setDataValue('home_address', JSON.stringify(value));
+      } else if (value === null || value === undefined) {
+        this.setDataValue('home_address', null);
+      } else {
+        this.setDataValue('home_address', value);
+      }
+    }
+  },
+  phone_number: {
+    type: DataTypes.STRING(20),
+    allowNull: true,
+    validate: {
+      len: [10, 20]
+    }
+  },
   home_affairs_verified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
