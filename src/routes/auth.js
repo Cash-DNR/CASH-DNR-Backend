@@ -1,3 +1,11 @@
+/* eslint-disable linebreak-style */
+/* eslint-disable no-multiple-empty-lines */
+/* eslint-disable linebreak-style */
+/* eslint-disable no-unused-vars */
+/* eslint-disable linebreak-style */
+/* eslint-disable space-before-function-paren */
+/* eslint-disable no-trailing-spaces */
+/* eslint-disable linebreak-style */
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcryptjs';
@@ -5,6 +13,8 @@ import jwt from 'jsonwebtoken';
 import { Op } from 'sequelize';
 import User from '../models/User.js';
 import { verifyIdWithHomeAffairs, validateRegistrationMatch, generateTaxNumber } from '../services/homeAffairs.js';
+import { sarsComplianceChecker } from '../services/SARS.js';
+import logger from '../services/logger.js';
 
 const router = express.Router();
 
@@ -92,7 +102,7 @@ router.post('/login', [
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -125,7 +135,7 @@ router.post('/verify-id', [
 
     const { idNumber } = req.body;
 
-    console.log(`🔍 ID verification request for: ${idNumber}`);
+    logger.info(`🔍 ID verification request for: ${idNumber}`);
 
     // Verify with Home Affairs
     const verificationResult = await verifyIdWithHomeAffairs(idNumber);
@@ -148,7 +158,7 @@ router.post('/verify-id', [
     });
 
   } catch (error) {
-    console.error('ID verification error:', error);
+    logger.error('ID verification error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error during ID verification'
@@ -213,7 +223,7 @@ router.post('/register', [
 
     const { email, password, idNumber, homeAddress, phoneNumber } = req.body;
 
-    console.log(`🔍 Starting registration for ID: ${idNumber}`);
+    logger.info(`🔍 Starting registration for ID: ${idNumber}`);
 
     // Check if email is already registered
     const existingEmailUser = await User.findOne({ where: { email } });
@@ -234,7 +244,7 @@ router.post('/register', [
     }
 
     // Verify ID with Home Affairs API and fetch personal details
-    console.log(`🔍 Verifying ID number with Home Affairs API: ${idNumber}`);
+    logger.info(`🔍 Verifying ID number with Home Affairs API: ${idNumber}`);
     const idVerificationResult = await verifyIdWithHomeAffairs(idNumber);
     
     console.log('🔍 Verification result:', JSON.stringify(idVerificationResult, null, 2));
@@ -264,7 +274,7 @@ router.post('/register', [
       });
     }
 
-    console.log(`✅ Home Affairs verification successful for: ${homeAffairsData.firstName} ${homeAffairsData.lastName}`);
+    logger.info(`✅ Home Affairs verification successful for: ${homeAffairsData.firstName} ${homeAffairsData.lastName}`);
 
     // Generate username from first name and last name
     const baseUsername = `${homeAffairsData.firstName.toLowerCase()}.${homeAffairsData.lastName.toLowerCase()}`;
@@ -319,39 +329,26 @@ router.post('/register', [
       { expiresIn: '24h' }
     );
 
-    // Return success response with user data (excluding password)
-    const userData = {
-      id: newUser.id,
-      username: newUser.username,
-      email: newUser.email,
-      firstName: newUser.first_name,
-      lastName: newUser.last_name,
-      idNumber: newUser.id_number,
-      dateOfBirth: newUser.date_of_birth,
-      gender: newUser.gender,
-      taxNumber: newUser.tax_number,
-      homeAddress: newUser.home_address,
-      phoneNumber: newUser.phone_number,
-      homeAffairsVerified: newUser.home_affairs_verified,
-      isActive: newUser.is_active,
-      isVerified: newUser.is_verified
-    };
-
-    console.log(`✅ User registered successfully: ${userData.username}`);
-
-    // Check if additional information is needed
-    const needsAdditionalInfo = !homeAddress || !phoneNumber;
-    let registrationMessage = 'User registered successfully with Home Affairs verification';
-    
-    if (needsAdditionalInfo) {
-      registrationMessage += '. Please provide home address and phone number to complete your profile.';
-    }
+    // Include SARS compliance data in the response
+    const sarsData = req.sarsData;
 
     res.status(201).json({
       success: true,
-      message: registrationMessage,
+      message: 'User registered successfully with Home Affairs and SARS verification',
       data: {
-        user: userData,
+        user: {
+          id: newUser.id,
+          username: newUser.username,
+          email: newUser.email,
+          firstName: newUser.first_name,
+          lastName: newUser.last_name,
+          idNumber: newUser.id_number,
+          dateOfBirth: newUser.date_of_birth,
+          gender: newUser.gender,
+          homeAffairsVerified: newUser.home_affairs_verified,
+          isActive: newUser.is_active,
+          isVerified: newUser.is_verified
+        },
         token,
         registrationComplete: !needsAdditionalInfo,
         missingInfo: {
@@ -371,12 +368,18 @@ router.post('/register', [
             maritalStatus: homeAffairsData.maritalStatus,
             taxNumber: taxNumber
           }
+        },
+        sarsVerification: {
+          taxReferenceNumber: sarsData.taxReferenceNumber,
+          taxComplianceStatus: sarsData.taxComplianceStatus,
+          lastSubmissionDate: sarsData.lastSubmissionDate,
+          outstandingReturns: sarsData.outstandingReturns
         }
       }
     });
 
   } catch (error) {
-    console.error('❌ Registration error:', error);
+    logger.error('❌ Registration error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error during registration',

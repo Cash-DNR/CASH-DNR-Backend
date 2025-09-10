@@ -1,3 +1,8 @@
+/* eslint-disable no-console */
+/* eslint-disable linebreak-style */
+/* eslint-disable no-trailing-spaces */
+/* eslint-disable no-unused-vars */
+/* eslint-disable linebreak-style */
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -9,7 +14,7 @@ import authRoutes from './src/routes/auth.js';
 config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 
 // Security middleware
 app.use(helmet());

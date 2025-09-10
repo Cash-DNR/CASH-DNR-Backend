@@ -1,3 +1,8 @@
+/* eslint-disable linebreak-style */
+/* eslint-disable no-trailing-spaces */
+/* eslint-disable no-unused-vars */
+/* eslint-disable quotes */
+/* eslint-disable linebreak-style */
 /**
  * Home Affairs API Service
  * Provides South African ID validation using the Home Affairs API
@@ -18,40 +23,54 @@ export function generateTaxNumber(idNumber) {
   return taxNumber;
 }
 
-// Mock database of valid South African IDs with personal information
+import logger from "./logger.js";
+
+// Unified mock data structure for Home Affairs
 const mockHomeAffairsData = [
   {
-    idNumber: "9001015009086",
-    firstName: "John",
-    lastName: "Doe",
-    dateOfBirth: "1990-01-01",
-    gender: "Male",
-    citizenship: "South African",
+    idNumber: '9001015009086',
+    firstName: 'John',
+    lastName: 'Doe',
+    dateOfBirth: '1990-01-01',
+    gender: 'Male',
+    citizenship: 'South African',
     isValid: true,
     isAlive: true,
-    maritalStatus: "Single"
+    maritalStatus: 'Single',
+    taxReferenceNumber: '1234567890',
+    taxComplianceStatus: 'Compliant',
+    lastSubmissionDate: '2025-08-15',
+    outstandingReturns: []
   },
   {
-    idNumber: "8505152240084",
-    firstName: "Jane",
-    lastName: "Smith",
-    dateOfBirth: "1985-05-15",
-    gender: "Female",
-    citizenship: "South African",
+    idNumber: '8505152240084',
+    firstName: 'Jane',
+    lastName: 'Smith',
+    dateOfBirth: '1985-05-15',
+    gender: 'Female',
+    citizenship: 'South African',
     isValid: true,
     isAlive: true,
-    maritalStatus: "Married"
+    maritalStatus: 'Married',
+    taxReferenceNumber: '9876543210',
+    taxComplianceStatus: 'Non-compliant',
+    lastSubmissionDate: '2025-06-30',
+    outstandingReturns: ['VAT2024Q2', 'PAYE2025M07']
   },
   {
-    idNumber: "9206301234567",
-    firstName: "Michael",
-    lastName: "Johnson",
-    dateOfBirth: "1992-06-30",
-    gender: "Male",
-    citizenship: "South African",
+    idNumber: '9206301234567',
+    firstName: 'Michael',
+    lastName: 'Johnson',
+    dateOfBirth: '1992-06-30',
+    gender: 'Male',
+    citizenship: 'South African',
     isValid: true,
     isAlive: true,
-    maritalStatus: "Single"
+    maritalStatus: 'Single',
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "8012157890123",
@@ -62,7 +81,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: true,
-    maritalStatus: "Divorced"
+    maritalStatus: "Divorced",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "9511280987654",
@@ -73,7 +96,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: true,
-    maritalStatus: "Single"
+    maritalStatus: "Single",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "8809034567087",
@@ -84,7 +111,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: true,
-    maritalStatus: "Married"
+    maritalStatus: "Married",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "9103126789083",
@@ -95,7 +126,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: true,
-    maritalStatus: "Single"
+    maritalStatus: "Single",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "8707082345085",
@@ -106,7 +141,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: true,
-    maritalStatus: "Married"
+    maritalStatus: "Married",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "9410198901086",
@@ -117,7 +156,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: true,
-    maritalStatus: "Single"
+    maritalStatus: "Single",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "8304253456089",
@@ -128,7 +171,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: true,
-    maritalStatus: "Married"
+    maritalStatus: "Married",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   // Additional test cases for edge scenarios
   {
@@ -140,7 +187,11 @@ const mockHomeAffairsData = [
     citizenship: "South African",
     isValid: true,
     isAlive: false,
-    maritalStatus: "Deceased"
+    maritalStatus: "Deceased",
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   },
   {
     idNumber: "0000000000000", // Completely invalid
@@ -151,7 +202,11 @@ const mockHomeAffairsData = [
     citizenship: null,
     isValid: false,
     isAlive: false,
-    maritalStatus: null
+    maritalStatus: null,
+    taxReferenceNumber: null,
+    taxComplianceStatus: null,
+    lastSubmissionDate: null,
+    outstandingReturns: []
   }
 ];
 
@@ -290,7 +345,7 @@ async function registerWithHomeAffairsAPI(userData) {
   try {
     const registerEndpoint = `${apiUrl}/api/register/citizen`;
     
-    console.log(`📝 Registering user with your API: ${registerEndpoint}`);
+    logger.info(`📝 Registering user with your API: ${registerEndpoint}`);
     
     const response = await fetch(registerEndpoint, {
       method: 'POST',
@@ -310,11 +365,11 @@ async function registerWithHomeAffairsAPI(userData) {
       timeout: 30000
     });
 
-    console.log(`📡 Registration response status: ${response.status}`);
+    logger.info(`📡 Registration response status: ${response.status}`);
 
     if (response.ok) {
       const data = await response.json();
-      console.log('✅ User registered successfully with your API:', data);
+      logger.info('✅ User registered successfully with your API:', data);
       
       return {
         success: true,
@@ -342,7 +397,7 @@ async function registerWithHomeAffairsAPI(userData) {
     }
 
   } catch (error) {
-    console.error('🚨 Registration API Error:', error);
+    logger.error('🚨 Registration API Error:', error);
     return {
       success: false,
       data: null,
@@ -366,7 +421,7 @@ async function realHomeAffairsAPI(idNumber) {
     // Primary endpoint: /citizens/{idNumber} based on your API documentation
     const citizenEndpoint = `${apiUrl}/api/citizens/${idNumber}`;
     
-    console.log(`🔍 Verifying ID with your API: ${citizenEndpoint}`);
+    logger.info(`🔍 Verifying ID with your API: ${citizenEndpoint}`);
     
     const response = await fetch(citizenEndpoint, {
       method: 'GET',
@@ -379,11 +434,11 @@ async function realHomeAffairsAPI(idNumber) {
       timeout: 30000 // 30 second timeout
     });
 
-    console.log(`📡 Response status: ${response.status} from your API`);
+    logger.info(`📡 Response status: ${response.status} from your API`);
 
     if (response.ok) {
       const data = await response.json();
-      console.log('✅ Successful API response from your service:', data);
+      logger.info('✅ Successful API response from your service:', data);
       
       // Transform your API response to match our expected format
       return {
@@ -401,7 +456,11 @@ async function realHomeAffairsAPI(idNumber) {
             citizenship: data.personalInfo?.nationality || 'South African',
             isValid: data.kycStatus === 'Verified' || data.status === 'Active',
             isAlive: true,
-            maritalStatus: data.personalInfo?.maritalStatus || 'Unknown'
+            maritalStatus: data.personalInfo?.maritalStatus || 'Unknown',
+            taxReferenceNumber: data.taxInfo?.taxReferenceNumber || null,
+            taxComplianceStatus: data.taxInfo?.complianceStatus || null,
+            lastSubmissionDate: data.taxInfo?.lastSubmissionDate || null,
+            outstandingReturns: data.taxInfo?.outstandingReturns || []
           },
           extractedInfo: extractIdInfo(idNumber)
         },
@@ -435,7 +494,7 @@ async function realHomeAffairsAPI(idNumber) {
     }
 
   } catch (error) {
-    console.error('🚨 Home Affairs API Error:', error);
+    logger.error('🚨 Home Affairs API Error:', error);
     return {
       success: false,
       data: null,
@@ -486,7 +545,7 @@ async function verifyIdWithHomeAffairs(idNumber) {
     
     let apiResponse;
     if (useMockMode) {
-      console.log('🔍 Using Home Affairs Mock API for ID verification');
+      logger.info('🔍 Using Home Affairs Mock API for ID verification');
       // For mock mode, validate checksum
       if (!validateSAIDFormat(cleanId)) {
         return {
@@ -502,13 +561,13 @@ async function verifyIdWithHomeAffairs(idNumber) {
       }
       apiResponse = await mockHomeAffairsAPI(cleanId);
     } else {
-      console.log('🔍 Using Real Home Affairs API for ID verification');
+      logger.info('🔍 Using Real Home Affairs API for ID verification');
       // For real API, skip checksum validation and let your API decide
       apiResponse = await realHomeAffairsAPI(cleanId);
       
       // If real API fails, fallback to mock for development
       if (!apiResponse.success && process.env.NODE_ENV === 'development') {
-        console.log('⚠️ Real API failed, falling back to mock data for development');
+        logger.info('⚠️ Real API failed, falling back to mock data for development');
         // Validate checksum for mock fallback
         if (validateSAIDFormat(cleanId)) {
           apiResponse = await mockHomeAffairsAPI(cleanId);
@@ -542,7 +601,7 @@ async function verifyIdWithHomeAffairs(idNumber) {
     };
 
   } catch (error) {
-    console.error('Home Affairs verification error:', error);
+    logger.error('Home Affairs verification error:', error);
     return {
       success: false,
       message: 'Internal error during ID verification',
