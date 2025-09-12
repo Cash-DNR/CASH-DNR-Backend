@@ -11,7 +11,7 @@ function validateSAIDFormat(idNumber) {
     console.log('Failed: Not 13 digits');
     return false;
   }
-
+   
   // Extract components
   const year = parseInt(cleanId.substring(0, 2));
   const month = parseInt(cleanId.substring(2, 4));

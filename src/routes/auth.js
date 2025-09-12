@@ -12,8 +12,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Op } from 'sequelize';
 import User from '../models/User.js';
-import { verifyIdWithHomeAffairs, validateRegistrationMatch, generateTaxNumber } from '../services/homeAffairs.js';
-import { sarsComplianceChecker } from '../services/SARS.js';
+import { verifyIdWithHomeAffairs } from '../services/homeAffairs.js';
+import { sarsComplianceChecker, generateTaxNumber } from '../services/SARS.js';
 import logger from '../services/logger.js';
 
 const router = express.Router();
@@ -21,18 +21,31 @@ const router = express.Router();
 
 
 /**
- * @route   POST /api/auth/login
- * @desc    Login user
+ * @route   POST /api/register/citizen
+ * @desc    Register a new citizen
  * @access  Public
  */
-router.post('/login', [
-  body('email')
+router.post('/citizen', [
+  body('idNumber')
+    .isLength({ min: 13, max: 13 })
+    .withMessage('South African ID number must be exactly 13 digits')
+    .isNumeric()
+    .withMessage('ID number must contain only numbers'),
+  body('contactInfo.email')
     .isEmail()
-    .normalizeEmail()
-    .withMessage('Please provide a valid email address'),
-  body('password')
-    .isLength({ min: 1 })
-    .withMessage('Password is required')
+    .withMessage('Please provide a valid email address')
+    .customSanitizer(value => {
+      // If no email provided, generate a test email based on timestamp
+      if (!value) {
+        const timestamp = Date.now();
+        return `test.user${timestamp}@example.com`;
+      }
+      return value;
+    }),
+  body('contactInfo.phone')
+    .optional()
+    .matches(/^\+27\s\d{2}\s\d{3}\s\d{4}$/)
+    .withMessage('Valid South African phone number required (format: +27 82 123 4567)')
 ], async (req, res) => {
   try {
     // Check for validation errors
@@ -45,67 +58,91 @@ router.post('/login', [
       });
     }
 
-    const { email, password } = req.body;
+    const { idNumber, contactInfo } = req.body;
 
-    // Find user by email
-    const user = await User.findOne({ where: { email } });
-    if (!user) {
-      return res.status(401).json({
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { id_number: idNumber },
+          { email: contactInfo.email }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'User already registered',
+        details: existingUser.email === contactInfo.email ? 
+          'Email already in use' : 'ID number already registered'
       });
     }
 
-    // Check if user is active
-    if (!user.is_active) {
-      return res.status(401).json({
+    // Verify with Home Affairs
+    const verificationResult = await verifyIdWithHomeAffairs(idNumber);
+    if (!verificationResult.success) {
+      return res.status(400).json({
         success: false,
-        message: 'Account is deactivated'
+        message: verificationResult.message,
+        details: verificationResult.details || 'ID verification failed'
       });
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
-    if (!isValidPassword) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
-    }
+    // Generate tax number if needed
+    const taxNumber = generateTaxNumber(idNumber);
+
+    // Hash password
+    const password_hash = await bcrypt.hash(req.body.password, 10);
+
+    // Generate username if not provided
+    const username = req.body.username || `user_${Date.now()}`;
+
+    // Create new user
+    const user = await User.create({
+      id_number: idNumber,
+      username,
+      email: contactInfo.email,
+      phone_number: contactInfo.phone || null,
+      password_hash,
+      first_name: verificationResult.citizen.firstName,
+      last_name: verificationResult.citizen.lastName,
+      tax_number: taxNumber,
+      status: User.STATUS.PENDING_DETAILS,
+      home_affairs_verified: true,
+      is_active: true,
+      is_verified: false
+    });
 
     // Generate JWT token
     const token = jwt.sign(
       { 
         userId: user.id,
-        email: user.email,
-        username: user.username
+        idNumber: user.idNumber
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    res.json({
+    res.status(201).json({
       success: true,
-      message: 'Login successful',
+      message: 'Citizen registered successfully',
       data: {
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          firstName: user.first_name,
-          lastName: user.last_name,
-          isActive: user.is_active,
-          isVerified: user.is_verified
+        userId: user.id,
+        taxId: taxNumber,
+        userInfo: {
+          fullName: user.fullName,
+          userType: 'Individual',
+          status: user.status
         },
         token
       }
     });
-
   } catch (error) {
-    logger.error('Login error:', error);
+    logger.error('Registration error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error during registration'
     });
   }
 });
@@ -167,23 +204,21 @@ router.post('/verify-id', [
 });
 
 /**
- * Main registration - only requires email, idNumber, password
+ * Main registration - requires ID number and contact information
  * Personal details are fetched from Home Affairs API
  */
 router.post('/register', [
-  body('email')
-    .isEmail()
-    .withMessage('Valid email is required'),
-  body('password')
-    .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
-    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
   body('idNumber')
     .isLength({ min: 13, max: 13 })
     .withMessage('South African ID number must be exactly 13 digits')
     .isNumeric()
     .withMessage('ID number must contain only numbers'),
+  body('contactInfo.email')
+    .isEmail()
+    .withMessage('Valid email is required'),
+  body('contactInfo.phone')
+    .matches(/^\+27\s\d{2}\s\d{3}\s\d{4}$/)
+    .withMessage('Valid South African phone number required (format: +27 82 123 4567)'),
   body('homeAddress')
     .optional()
     .custom((value) => {

@@ -29,6 +29,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded files
+app.use('/uploads', express.static('uploads'));
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -37,8 +40,16 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Import routes
+import profileRoutes from './src/routes/profile.js';
+import businessRoutes from './src/routes/business.js';
+import transactionRoutes from './src/routes/transactions.js';
+
 // API Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/register', authRoutes);
+app.use('/api/register/business', businessRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/users', profileRoutes);
 
 // API info endpoint
 app.get('/api', (req, res) => {
@@ -46,7 +57,11 @@ app.get('/api', (req, res) => {
     message: 'Cash DNR Backend API',
     version: '1.0.0',
     endpoints: {
-      auth: '/api/auth'
+      register: '/api/register',
+      citizens: '/api/citizens',
+      businesses: '/api/businesses',
+      users: '/api/users',
+      transactions: '/api/transactions'
     }
   });
 });

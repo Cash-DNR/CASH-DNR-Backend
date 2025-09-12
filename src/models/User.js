@@ -2,7 +2,29 @@
 import bcrypt from 'bcryptjs';
 import { sequelize } from '../config/database.js';
 
-class User extends Model {}
+class User extends Model {
+  static STATUS = {
+    PENDING_DETAILS: 'Pending Details',
+    PENDING_DOCUMENTS: 'Pending Documents',
+    PENDING_REVIEW: 'Pending Review',
+    VERIFIED: 'Verified',
+    REJECTED: 'Rejected'
+  };
+
+  // Getters for camelCase access
+  get firstName() {
+    return this.first_name;
+  }
+
+  get lastName() {
+    return this.last_name;
+  }
+
+  // Get full name helper
+  get fullName() {
+    return `${this.first_name} ${this.last_name}`;
+  }
+}
 
 User.init({
   id: {
@@ -20,12 +42,11 @@ User.init({
     }
   },
   email: {
-    type: DataTypes.STRING(255),
+    type: DataTypes.STRING,
     allowNull: false,
     unique: true,
     validate: {
-      isEmail: true,
-      notEmpty: true
+      isEmail: true
     }
   },
   password_hash: {
@@ -120,6 +141,43 @@ User.init({
   is_active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  phone: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    validate: {
+      is: /^\+27\s\d{2}\s\d{3}\s\d{4}$/
+    }
+  },
+  alternativePhone: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    validate: {
+      is: /^\+27\s\d{2}\s\d{3}\s\d{4}$/
+    }
+  },
+  homeAddress: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    validate: {
+      isValidAddress(value) {
+        if (!value) return;
+        const required = ['streetAddress', 'town', 'city', 'province', 'postalCode'];
+        const missing = required.filter(field => !value[field]);
+        if (missing.length > 0) {
+          throw new Error(`Missing required address fields: ${missing.join(', ')}`);
+        }
+      }
+    }
+  },
+  documents: {
+    type: DataTypes.JSONB,
+    allowNull: true
+  },
+  documentStatus: {
+    type: DataTypes.ENUM,
+    values: Object.values(User.STATUS),
+    defaultValue: User.STATUS.PENDING_DETAILS
   }
 }, {
   sequelize,

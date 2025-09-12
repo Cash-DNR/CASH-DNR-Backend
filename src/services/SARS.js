@@ -1,189 +1,194 @@
 /* eslint-disable linebreak-style */
+import logger from './logger.js';
+import fetch from 'node-fetch';
+
 /**
- * SARS API Service (Enhanced)
- * Checks if a user has a registered tax number and compliance status
- * Includes mock data for testing purposes
+ * SARS Tax Service
+ * Provides tax verification and compliance checking using the SARS API
  */
 
-// Unified mock data structure for SARS
-const mockSarsData = [
-  {
-    idNumber: '9001015009086', // John Doe
-    taxReferenceNumber: '1234567890',
-    taxComplianceStatus: 'Compliant',
-    lastSubmissionDate: '2025-08-15',
-    outstandingReturns: [],
-    firstName: 'John',
-    lastName: 'Doe',
-    dateOfBirth: '1990-01-01',
-    gender: 'Male',
-    citizenship: 'South African',
-    maritalStatus: 'Single'
+// Base URL for SARS API
+const DEFAULT_SARS_API_URL = 'https://cash-dnr-api.onrender.com/sars';
+
+// Valid tax compliance statuses
+const COMPLIANCE_STATUSES = {
+  COMPLIANT: 'Compliant',
+  NON_COMPLIANT: 'Non-compliant',
+  PENDING: 'Pending',
+  UNKNOWN: 'Unknown'
+};
+
+// Tax return types with metadata
+const TAX_RETURN_TYPES = {
+  VAT: {
+    code: 'VAT',
+    name: 'Value Added Tax',
+    periods: ['Q1', 'Q2', 'Q3', 'Q4'],
+    periodType: 'quarter'
   },
-  {
-    idNumber: '8505152240084', // Jane Smith
-    taxReferenceNumber: '9876543210',
-    taxComplianceStatus: 'Non-compliant',
-    lastSubmissionDate: '2025-06-30',
-    outstandingReturns: ['VAT2024Q2', 'PAYE2025M07'],
-    firstName: 'Jane',
-    lastName: 'Smith',
-    dateOfBirth: '1985-05-15',
-    gender: 'Female',
-    citizenship: 'South African',
-    maritalStatus: 'Married'
+  PAYE: {
+    code: 'PAYE',
+    name: 'Pay As You Earn',
+    periods: Array.from({length: 12}, (_, i) => (i + 1).toString().padStart(2, '0')),
+    periodType: 'month'
   },
-  {
-    idNumber: '9206301234567', // Michael Johnson
-    taxReferenceNumber: null, // Not registered yet
-    taxComplianceStatus: null,
-    lastSubmissionDate: null,
-    outstandingReturns: [],
-    firstName: 'Michael',
-    lastName: 'Johnson',
-    dateOfBirth: '1992-06-30',
-    gender: 'Male',
-    citizenship: 'South African',
-    maritalStatus: 'Single'
+  ITR: {
+    code: 'ITR',
+    name: 'Individual Tax Return',
+    periods: ['annual'],
+    periodType: 'year'
+  },
+  PIT: {
+    code: 'PIT',
+    name: 'Personal Income Tax',
+    periods: ['annual'],
+    periodType: 'year'
   }
-];
+};
 
 /**
- * Simulates API call to SARS
+ * Verify taxpayer status with SARS
  * @param {string} idNumber - South African ID number
- * @param {boolean} consentToRegister - User consent for tax number registration
- * @returns {Promise<object>} - API response
+ * @returns {Promise<object>} - Verification result
  */
-async function mockSarsAPI(idNumber, consentToRegister = false) {
-  await new Promise(resolve => setTimeout(resolve, Math.random() * 500 + 300)); // Simulate delay
+export async function verifyWithSARS(idNumber) {
+  const apiUrl = process.env.SARS_API_URL || DEFAULT_SARS_API_URL;
+  
+  try {
+    logger.info(`🔍 Verifying tax status for ID: ${idNumber}`);
+    const response = await fetch(`${apiUrl}/taxpayers/${idNumber}/verification`);
+    const data = await response.json();
 
-  const record = mockSarsData.find(r => r.idNumber === idNumber);
-
-  if (record) {
-    if (record.taxReferenceNumber) {
-      return {
-        success: true,
-        message: 'Taxpayer found',
-        data: {
-          idNumber,
-          taxReferenceNumber: record.taxReferenceNumber,
-          taxComplianceStatus: record.taxComplianceStatus,
-          lastSubmissionDate: record.lastSubmissionDate,
-          outstandingReturns: record.outstandingReturns
-        }
-      };
-    } else if (consentToRegister) {
-      // Generate a new tax reference number
-      const newTaxReferenceNumber = `TRN${Math.floor(1000000000 + Math.random() * 9000000000)}`;
-      record.taxReferenceNumber = newTaxReferenceNumber;
-      record.taxComplianceStatus = 'Compliant';
-      record.lastSubmissionDate = new Date().toISOString().split('T')[0];
-      return {
-        success: true,
-        message: 'Tax number generated successfully',
-        data: {
-          idNumber,
-          taxReferenceNumber: newTaxReferenceNumber,
-          taxComplianceStatus: 'Compliant',
-          lastSubmissionDate: record.lastSubmissionDate,
-          outstandingReturns: []
-        }
-      };
-    } else {
+    if (!response.ok) {
+      logger.error(`❌ SARS API error: ${data.error || response.statusText}`);
       return {
         success: false,
-        message: 'User has no tax number registered',
-        data: {
-          idNumber,
-          taxReferenceNumber: null
-        },
-        needsRegistration: true
+        error: data.error || 'Failed to verify with SARS',
+        code: data.code || 'VERIFICATION_FAILED',
+        timestamp: new Date().toISOString(),
+        service: 'sars'
       };
     }
-  }
 
-  return {
-    success: false,
-    message: 'ID number not found in SARS database',
-    data: null
-  };
-}
+    logger.info(`✅ Tax verification successful for ID: ${idNumber}`);
+    return {
+      success: true,
+      idNumber: data.idNumber,
+      isTaxRegistered: data.isTaxRegistered,
+      taxNumber: data.taxNumber,
+      verificationTimestamp: data.verificationTimestamp,
+      validationSource: data.validationSource,
+      complianceDetails: data.complianceDetails
+    };
 
-/**
- * Main function to verify user with SARS
- * @param {string} idNumber
- * @returns {Promise<object>}
- */
-async function verifyWithSARS(idNumber, consentToRegister) {
-  try {
-    const useMockMode = process.env.SARS_MOCK_MODE === 'true';
-    let apiResponse;
-
-    if (useMockMode) {
-      console.log('🔍 Using SARS Mock API for verification');
-      apiResponse = await mockSarsAPI(idNumber, consentToRegister);
-    } else {
-      // TODO: Replace with real SARS API integration when available
-      console.log('⚠️ Real SARS API integration not implemented, using mock fallback');
-      apiResponse = await mockSarsAPI(idNumber, consentToRegister);
-      apiResponse.fallbackUsed = true;
-    }
-
-    return apiResponse;
   } catch (error) {
-    console.error('🚨 SARS API Error:', error);
+    logger.error('🚨 SARS Verification Error:', error);
     return {
       success: false,
-      message: 'Internal error during SARS verification',
-      error: error.message
+      error: 'Failed to connect to SARS API',
+      code: 'API_CONNECTION_ERROR',
+      timestamp: new Date().toISOString(),
+      service: 'sars'
     };
   }
 }
 
 /**
+ * Validates tax compliance status and issues
+ * @param {object} complianceDetails - Compliance details from SARS
+ * @returns {object} - Validation result
+ */
+export function validateTaxCompliance(complianceDetails) {
+  if (!complianceDetails) {
+    return {
+      isCompliant: false,
+      status: COMPLIANCE_STATUSES.UNKNOWN,
+      issues: ['No compliance information available']
+    };
+  }
+
+  return {
+    isCompliant: complianceDetails.status === COMPLIANCE_STATUSES.COMPLIANT,
+    status: complianceDetails.status,
+    issues: complianceDetails.complianceIssues || [],
+    lastVerified: complianceDetails.lastVerified,
+    outstandingReturns: complianceDetails.outstandingReturns || {},
+    nextFilingDue: complianceDetails.nextFilingDue || {},
+    lastSubmissions: complianceDetails.lastSubmissions || {}
+  };
+}
+
+/**
  * Middleware to check SARS compliance
- * @param {object} req - Express request object
- * @param {object} res - Express response object
- * @param {function} next - Express next middleware function
  */
 export async function sarsComplianceChecker(req, res, next) {
-  const { idNumber, consentToRegister } = req.body;
+  const { idNumber } = req.body;
 
   if (!idNumber) {
+    logger.warn('❌ SARS compliance check attempted without ID number');
     return res.status(400).json({
       success: false,
-      message: 'ID number is required for SARS compliance check'
+      error: 'ID number is required for SARS compliance check',
+      code: 'MISSING_ID_NUMBER',
+      timestamp: new Date().toISOString(),
+      service: 'sars'
     });
   }
 
   try {
-    const sarsResponse = await verifyWithSARS(idNumber, consentToRegister);
+    const sarsResponse = await verifyWithSARS(idNumber);
 
     if (!sarsResponse.success) {
-      if (sarsResponse.needsRegistration) {
-        return res.status(400).json({
-          success: false,
-          message: sarsResponse.message,
-          data: sarsResponse.data,
-          needsRegistration: true
-        });
-      }
-
-      return res.status(400).json({
-        success: false,
-        message: sarsResponse.message,
-        data: sarsResponse.data
-      });
+      logger.warn(`⚠️ SARS verification failed for ID: ${idNumber}`);
+      return res.status(400).json(sarsResponse);
     }
 
-    req.sarsData = sarsResponse.data; // Attach SARS data to request object
+    // Validate compliance
+    const complianceValidation = validateTaxCompliance(sarsResponse.complianceDetails);
+    
+    // Attach both SARS data and compliance validation to request object
+    req.sarsData = {
+      ...sarsResponse,
+      compliance: complianceValidation
+    };
+
+    logger.info(`✅ SARS compliance check completed for ID: ${idNumber}`);
     next();
   } catch (error) {
-    console.error('🚨 SARS Middleware Error:', error);
+    logger.error('🚨 SARS Middleware Error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error during SARS compliance check'
+      error: 'Internal server error during SARS compliance check',
+      code: 'INTERNAL_SERVER_ERROR',
+      timestamp: new Date().toISOString(),
+      service: 'sars'
     });
   }
 }
+
+/**
+ * Generate a tax number for a new taxpayer
+ * @param {string} idNumber - South African ID number
+ * @returns {string} - Generated tax number
+ */
+export function generateTaxNumber(idNumber) {
+  // Tax number format: T + last 9 digits of ID + checksum digit
+  const baseNumber = idNumber.slice(-9);
+  const prefix = 'T';
+  
+  // Calculate checksum (simple implementation)
+  let sum = 0;
+  for (let i = 0; i < baseNumber.length; i++) {
+    sum += parseInt(baseNumber[i]) * (i + 1);
+  }
+  const checksum = (sum % 9).toString();
+  
+  return `${prefix}${baseNumber}${checksum}`;
+}
+
+// Export constants and functions
+export {
+  COMPLIANCE_STATUSES,
+  TAX_RETURN_TYPES
+};
 
