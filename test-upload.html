@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-section {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .upload-section.dragover {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .file-list {
+            margin-top: 20px;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>File Upload Test - Cash DNR Backend</h1>
+    <p>Test the file upload functionality with 400MB limit</p>
+
+    <!-- Single File Upload -->
+    <div class="upload-section" id="singleUpload">
+        <h3>Single File Upload</h3>
+        <input type="file" id="singleFile" accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx">
+        <br>
+        <button onclick="uploadSingle()">Upload Single File</button>
+    </div>
+
+    <!-- Multiple File Upload -->
+    <div class="upload-section" id="multipleUpload">
+        <h3>Multiple File Upload</h3>
+        <input type="file" id="multipleFiles" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx">
+        <br>
+        <button onclick="uploadMultiple()">Upload Multiple Files</button>
+    </div>
+
+    <!-- File List -->
+    <div class="file-list">
+        <h3>Uploaded Files</h3>
+        <button onclick="loadFiles()">Refresh File List</button>
+        <div id="fileList"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="result"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api/upload';
+
+        function showResult(message, isError = false) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `<div class="result ${isError ? 'error' : 'success'}">${message}</div>`;
+        }
+
+        async function uploadSingle() {
+            const fileInput = document.getElementById('singleFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showResult('Please select a file to upload', true);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/single`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(`File uploaded successfully!<br>
+                        Original Name: ${result.data.originalName}<br>
+                        File Size: ${(result.data.fileSize / 1024 / 1024).toFixed(2)} MB<br>
+                        MIME Type: ${result.data.mimeType}`);
+                    loadFiles(); // Refresh file list
+                } else {
+                    showResult(`Upload failed: ${result.message}`, true);
+                }
+            } catch (error) {
+                showResult(`Upload error: ${error.message}`, true);
+            }
+        }
+
+        async function uploadMultiple() {
+            const fileInput = document.getElementById('multipleFiles');
+            const files = fileInput.files;
+
+            if (files.length === 0) {
+                showResult('Please select files to upload', true);
+                return;
+            }
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/multiple`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(`${result.data.count} files uploaded successfully!`);
+                    loadFiles(); // Refresh file list
+                } else {
+                    showResult(`Upload failed: ${result.message}`, true);
+                }
+            } catch (error) {
+                showResult(`Upload error: ${error.message}`, true);
+            }
+        }
+
+        async function loadFiles() {
+            try {
+                const response = await fetch(`${API_BASE}/files`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const fileListDiv = document.getElementById('fileList');
+                    
+                    if (result.data.files.length === 0) {
+                        fileListDiv.innerHTML = '<p>No files uploaded yet.</p>';
+                        return;
+                    }
+
+                    fileListDiv.innerHTML = result.data.files.map(file => `
+                        <div class="file-item">
+                            <div>
+                                <strong>${file.filename}</strong><br>
+                                <small>Size: ${(file.size / 1024 / 1024).toFixed(2)} MB | 
+                                Created: ${new Date(file.created).toLocaleString()}</small>
+                            </div>
+                            <div>
+                                <button onclick="downloadFile('${file.filename}')">Download</button>
+                                <button onclick="deleteFile('${file.filename}')" style="background-color: #dc3545;">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    showResult(`Failed to load files: ${result.message}`, true);
+                }
+            } catch (error) {
+                showResult(`Error loading files: ${error.message}`, true);
+            }
+        }
+
+        async function downloadFile(filename) {
+            try {
+                const response = await fetch(`${API_BASE}/download/${filename}`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    showResult(`Download failed for ${filename}`, true);
+                }
+            } catch (error) {
+                showResult(`Download error: ${error.message}`, true);
+            }
+        }
+
+        async function deleteFile(filename) {
+            if (!confirm(`Are you sure you want to delete ${filename}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/${filename}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult(`File ${filename} deleted successfully`);
+                    loadFiles(); // Refresh file list
+                } else {
+                    showResult(`Delete failed: ${result.message}`, true);
+                }
+            } catch (error) {
+                showResult(`Delete error: ${error.message}`, true);
+            }
+        }
+
+        // Load files on page load
+        window.onload = function() {
+            loadFiles();
+        };
+    </script>
+</body>
+</html>

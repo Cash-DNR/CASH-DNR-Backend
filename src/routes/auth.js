@@ -12,6 +12,8 @@ import User from '../models/User.js';
 import { verifyIdWithHomeAffairs } from '../services/homeAffairs.js';
 import { sarsComplianceChecker, generateTaxNumber } from '../services/SARS.js';
 import logger from '../services/logger.js';
+import { upload as registrationUpload } from '../controllers/fileController.js';
+import File from '../models/File.js';
 
 // Function to extract date of birth from South African ID number
 const extractDateOfBirth = (idNumber) => {
@@ -762,5 +764,186 @@ router.post('/test-upload', async (req, res) => {
         });
     }
 });
+
+/**
+ * @route   POST /api/auth/register-with-documents
+ * @desc    Register user and upload required documents in one step (no token required)
+ * @access  Public (multipart/form-data)
+ */
+router.post(
+  '/register-with-documents',
+  registrationUpload.fields([
+    { name: 'id_document', maxCount: 5 },
+    { name: 'proof_of_residence', maxCount: 5 },
+    { name: 'bank_statement', maxCount: 5 },
+    { name: 'other_documents', maxCount: 20 }
+  ]),
+  async (req, res) => {
+    try {
+      // Validate required text fields
+      const {
+        email,
+        password,
+        idNumber,
+        phoneNumber
+      } = req.body;
+
+      let homeAddress = req.body.homeAddress;
+      if (typeof homeAddress === 'string') {
+        try {
+          homeAddress = JSON.parse(homeAddress);
+        } catch (_) {
+          return res.status(400).json({ success: false, message: 'homeAddress must be JSON' });
+        }
+      }
+
+      const missing = [];
+      if (!email) missing.push('email');
+      if (!password) missing.push('password');
+      if (!idNumber) missing.push('idNumber');
+      if (missing.length) {
+        return res.status(400).json({ success: false, message: 'Missing required fields', missing });
+      }
+
+      // Ensure mandatory documents are present
+      const files = req.files || {};
+      if (!files.id_document || !files.proof_of_residence) {
+        return res.status(400).json({
+          success: false,
+          message: 'id_document and proof_of_residence are required'
+        });
+      }
+
+      // Check duplicates
+      const existingEmailUser = await User.findOne({ where: { email } });
+      if (existingEmailUser) {
+        return res.status(400).json({ success: false, message: 'This email is already registered' });
+      }
+      const existingIdUser = await User.findOne({ where: { id_number: idNumber } });
+      if (existingIdUser) {
+        return res.status(400).json({ success: false, message: 'This ID number is already registered' });
+      }
+
+      // Verify ID with Home Affairs
+      const idVerificationResult = await verifyIdWithHomeAffairs(idNumber);
+      if (!idVerificationResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID verification failed',
+          details: idVerificationResult.message
+        });
+      }
+
+      const homeAffairsData = idVerificationResult.data?.homeAffairsData;
+      if (!homeAffairsData || !homeAffairsData.firstName || !homeAffairsData.lastName) {
+        return res.status(400).json({ success: false, message: 'Incomplete personal details from Home Affairs' });
+      }
+
+      // Build unique username
+      const baseUsername = `${homeAffairsData.firstName.toLowerCase()}.${homeAffairsData.lastName.toLowerCase()}`;
+      let username = baseUsername;
+      let counter = 1;
+      while (await User.findOne({ where: { username } })) {
+        username = `${baseUsername}${counter}`;
+        counter++;
+      }
+
+      // Password hash
+      const passwordHash = await bcrypt.hash(password, 12);
+
+      // Tax number
+      let taxNumber = homeAffairsData.taxNumber || homeAffairsData.taxId;
+      if (!taxNumber) taxNumber = generateTaxNumber(idNumber);
+
+      // Create user first
+      const newUser = await User.create({
+        username,
+        email,
+        password_hash: passwordHash,
+        first_name: homeAffairsData.firstName,
+        last_name: homeAffairsData.lastName,
+        id_number: idNumber,
+        date_of_birth: homeAffairsData.dateOfBirth,
+        gender: homeAffairsData.gender,
+        tax_number: taxNumber,
+        home_address: homeAddress || null,
+        phone_number: phoneNumber || null,
+        home_affairs_verified: true,
+        is_verified: false,
+        is_active: true
+      });
+
+      // Persist uploaded files to DB linked to new user
+      const mapCategory = (fieldname) => {
+        const mapping = {
+          id_document: 'id_documents',
+          id_documents: 'id_documents',
+          proof_of_residence: 'proof_of_address',
+          proof_of_address: 'proof_of_address',
+          bank_statement: 'bank_statements',
+          bank_statements: 'bank_statements',
+          other_documents: 'other'
+        };
+        return mapping[fieldname] || 'other';
+      };
+
+      const created = [];
+      const allFiles = Object.values(files).flat();
+      for (const f of allFiles) {
+        const rec = await File.create({
+          original_name: f.originalname,
+          file_name: f.filename,
+          file_path: f.path,
+          mime_type: f.mimetype,
+          file_size: f.size,
+          file_category: mapCategory(f.fieldname),
+          user_id: newUser.id,
+          upload_status: 'completed',
+          metadata: {
+            uploadedAt: new Date().toISOString(),
+            userAgent: req.get('User-Agent'),
+            ipAddress: req.ip,
+            fieldname: f.fieldname
+          }
+        });
+        created.push({ id: rec.id, originalName: rec.original_name, fileName: rec.file_name, category: rec.file_category });
+      }
+
+      // Determine if required docs provided to mark as verified
+      const requiredCategories = ['id_documents', 'proof_of_address', 'bank_statements'];
+      const present = new Set(created.map(c => c.category));
+      if (requiredCategories.every(c => present.has(c))) {
+        newUser.is_verified = true;
+        await newUser.save();
+      }
+
+      // Respond without issuing a token
+      return res.status(201).json({
+        success: true,
+        message: 'User registered and documents uploaded',
+        data: {
+          user: {
+            id: newUser.id,
+            username: newUser.username,
+            email: newUser.email,
+            firstName: newUser.first_name,
+            lastName: newUser.last_name,
+            idNumber: newUser.id_number,
+            dateOfBirth: newUser.date_of_birth,
+            gender: newUser.gender,
+            taxNumber: newUser.tax_number,
+            homeAffairsVerified: newUser.home_affairs_verified,
+            isActive: newUser.is_active,
+            isVerified: newUser.is_verified
+          },
+          uploaded: created
+        }
+      });
+    } catch (error) {
+      logger.error('Register-with-documents error:', error);
+      return res.status(500).json({ success: false, message: 'Internal server error during registration with documents' });
+    }
+  }
+);
 
 export default router;
