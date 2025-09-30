@@ -16,6 +16,7 @@ import transactionRoutes from '../src/routes/transactions.js';
 import adminRoutes from '../src/routes/admin.js';
 import profileRoutes from '../src/routes/profile.js';
 import usersRoutes from '../src/routes/users.js';
+import uploadRoutes from '../src/routes/upload.js';
 
 // Import database configuration
 import '../src/config/database.js';
@@ -118,6 +119,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Debug middleware for unmatched routes
 app.use((req, res) => {

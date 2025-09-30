@@ -5,8 +5,7 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
-    "start": "node API/server.js",
-    "start:src": "node src/server.js",
+    "start": "node src/server.js",
     "dev": "set NODE_ENV=development&& nodemon src/server.js",
     "dev:prod": "set NODE_ENV=production&& nodemon src/server.js",
     "start:dev": "set NODE_ENV=development&& node src/server.js",
