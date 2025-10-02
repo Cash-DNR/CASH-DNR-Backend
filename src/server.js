@@ -108,8 +108,8 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.get('/health', (req, res) => res.json({ status: 'healthy' }));
 
 // API Routes with debug logging
-app.use('/api', (req, res, next) => {
-  console.log('⚡ Hit /api route handler');
+app.use('/api/auth', (req, res, next) => {
+  console.log('⚡ Hit /api/auth route handler');
   next();
 }, authRoutes);
 
