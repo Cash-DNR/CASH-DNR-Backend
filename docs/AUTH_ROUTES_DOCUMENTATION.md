@@ -4,6 +4,9 @@
 This document provides comprehensive documentation for all authentication routes in the CASH-DNR Backend system. The authentication system includes user registration, login with OTP verification, and various utility endpoints.
 
 ## Base URL
+**Production**: `https://cash-dnr-backend.onrender.com/api/auth`
+**Development**: `http://localhost:3000/api/auth`
+
 All authentication routes are prefixed with `/api/auth`
 
 ---
