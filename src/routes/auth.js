@@ -12,6 +12,24 @@ import User from '../models/User.js';
 import { verifyIdWithHomeAffairs } from '../services/homeAffairs.js';
 import { sarsComplianceChecker, generateTaxNumber } from '../services/SARS.js';
 import logger from '../services/logger.js';
+import { upload as registrationUpload } from '../controllers/fileController.js';
+import File from '../models/File.js';
+
+// In-memory OTP storage (in production, use Redis or database)
+const otpStorage = new Map();
+
+// Function to generate 6-digit OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Function to send OTP via SMS (mock implementation)
+const sendOTP = async (phoneNumber, otp) => {
+  // In production, integrate with SMS service like Twilio, AWS SNS, etc.
+  console.log(`📱 Sending OTP ${otp} to ${phoneNumber}`);
+  // Mock successful send
+  return { success: true, message: 'OTP sent successfully' };
+};
 
 // Function to extract date of birth from South African ID number
 const extractDateOfBirth = (idNumber) => {
@@ -761,6 +779,618 @@ router.post('/test-upload', async (req, res) => {
             error: error.message
         });
     }
+});
+
+/**
+ * @route   POST /api/auth/register-with-documents
+ * @desc    Register user and upload required documents in one step (no token required)
+ * @access  Public (multipart/form-data)
+ */
+router.post(
+  '/register-with-documents',
+  registrationUpload.fields([
+    { name: 'id_document', maxCount: 5 },
+    { name: 'proof_of_residence', maxCount: 5 },
+    { name: 'bank_statement', maxCount: 5 },
+    { name: 'other_documents', maxCount: 20 }
+  ]),
+  async (req, res) => {
+    try {
+      // Validate required text fields
+      const {
+        email,
+        password,
+        idNumber,
+        phoneNumber
+      } = req.body;
+
+      let homeAddress = req.body.homeAddress;
+      if (typeof homeAddress === 'string') {
+        try {
+          homeAddress = JSON.parse(homeAddress);
+        } catch (_) {
+          return res.status(400).json({ success: false, message: 'homeAddress must be JSON' });
+        }
+      }
+
+      const missing = [];
+      if (!email) missing.push('email');
+      if (!password) missing.push('password');
+      if (!idNumber) missing.push('idNumber');
+      if (missing.length) {
+        return res.status(400).json({ success: false, message: 'Missing required fields', missing });
+      }
+
+      // Ensure mandatory documents are present
+      const files = req.files || {};
+      if (!files.id_document || !files.proof_of_residence) {
+        return res.status(400).json({
+          success: false,
+          message: 'id_document and proof_of_residence are required'
+        });
+      }
+
+      // Check duplicates
+      const existingEmailUser = await User.findOne({ where: { email } });
+      if (existingEmailUser) {
+        return res.status(400).json({ success: false, message: 'This email is already registered' });
+      }
+      const existingIdUser = await User.findOne({ where: { id_number: idNumber } });
+      if (existingIdUser) {
+        return res.status(400).json({ success: false, message: 'This ID number is already registered' });
+      }
+
+      // Verify ID with Home Affairs
+      const idVerificationResult = await verifyIdWithHomeAffairs(idNumber);
+      if (!idVerificationResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID verification failed',
+          details: idVerificationResult.message
+        });
+      }
+
+      const homeAffairsData = idVerificationResult.data?.homeAffairsData;
+      if (!homeAffairsData || !homeAffairsData.firstName || !homeAffairsData.lastName) {
+        return res.status(400).json({ success: false, message: 'Incomplete personal details from Home Affairs' });
+      }
+
+      // Build unique username
+      const baseUsername = `${homeAffairsData.firstName.toLowerCase()}.${homeAffairsData.lastName.toLowerCase()}`;
+      let username = baseUsername;
+      let counter = 1;
+      while (await User.findOne({ where: { username } })) {
+        username = `${baseUsername}${counter}`;
+        counter++;
+      }
+
+      // Password hash
+      const passwordHash = await bcrypt.hash(password, 12);
+
+      // Tax number
+      let taxNumber = homeAffairsData.taxNumber || homeAffairsData.taxId;
+      if (!taxNumber) taxNumber = generateTaxNumber(idNumber);
+
+      // Create user first
+      const newUser = await User.create({
+        username,
+        email,
+        password_hash: passwordHash,
+        first_name: homeAffairsData.firstName,
+        last_name: homeAffairsData.lastName,
+        id_number: idNumber,
+        date_of_birth: homeAffairsData.dateOfBirth,
+        gender: homeAffairsData.gender,
+        tax_number: taxNumber,
+        home_address: homeAddress || null,
+        phone_number: phoneNumber || null,
+        home_affairs_verified: true,
+        is_verified: false,
+        is_active: true
+      });
+
+      // Persist uploaded files to DB linked to new user
+      const mapCategory = (fieldname) => {
+        const mapping = {
+          id_document: 'id_documents',
+          id_documents: 'id_documents',
+          proof_of_residence: 'proof_of_address',
+          proof_of_address: 'proof_of_address',
+          bank_statement: 'bank_statements',
+          bank_statements: 'bank_statements',
+          other_documents: 'other'
+        };
+        return mapping[fieldname] || 'other';
+      };
+
+      const created = [];
+      const allFiles = Object.values(files).flat();
+      for (const f of allFiles) {
+        const rec = await File.create({
+          original_name: f.originalname,
+          file_name: f.filename,
+          file_path: f.path,
+          mime_type: f.mimetype,
+          file_size: f.size,
+          file_category: mapCategory(f.fieldname),
+          user_id: newUser.id,
+          upload_status: 'completed',
+          metadata: {
+            uploadedAt: new Date().toISOString(),
+            userAgent: req.get('User-Agent'),
+            ipAddress: req.ip,
+            fieldname: f.fieldname
+          }
+        });
+        created.push({ id: rec.id, originalName: rec.original_name, fileName: rec.file_name, category: rec.file_category });
+      }
+
+      // Determine if required docs provided to mark as verified
+      const requiredCategories = ['id_documents', 'proof_of_address', 'bank_statements'];
+      const present = new Set(created.map(c => c.category));
+      if (requiredCategories.every(c => present.has(c))) {
+        newUser.is_verified = true;
+        await newUser.save();
+      }
+
+      // Respond without issuing a token
+      return res.status(201).json({
+        success: true,
+        message: 'User registered and documents uploaded',
+        data: {
+          user: {
+            id: newUser.id,
+            username: newUser.username,
+            email: newUser.email,
+            firstName: newUser.first_name,
+            lastName: newUser.last_name,
+            idNumber: newUser.id_number,
+            dateOfBirth: newUser.date_of_birth,
+            gender: newUser.gender,
+            taxNumber: newUser.tax_number,
+            homeAffairsVerified: newUser.home_affairs_verified,
+            isActive: newUser.is_active,
+            isVerified: newUser.is_verified
+          },
+          uploaded: created
+        }
+      });
+    } catch (error) {
+      logger.error('Register-with-documents error:', error);
+      return res.status(500).json({ success: false, message: 'Internal server error during registration with documents' });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/auth/login/check-email
+ * @desc    Check if email exists in database
+ * @access  Public
+ */
+router.post('/login/check-email', [
+  body('email')
+    .isEmail()
+    .withMessage('Valid email is required')
+    .normalizeEmail()
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email } = req.body;
+
+    logger.info(`🔍 Checking email existence: ${email}`);
+
+    // Check if user exists with this email
+    const user = await User.findOne({ where: { email } });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No account found with this email address',
+        code: 'EMAIL_NOT_FOUND'
+      });
+    }
+
+    // Check if account is active
+    if (!user.is_active) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is deactivated. Please contact support.',
+        code: 'ACCOUNT_DEACTIVATED'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Email found',
+      data: {
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        accountType: user.business_registration_number ? 'business' : 'individual'
+      }
+    });
+
+  } catch (error) {
+    logger.error('Email check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during email verification'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/login/verify-credentials
+ * @desc    Verify ID/Business number and password, then send OTP
+ * @access  Public
+ */
+router.post('/login/verify-credentials', [
+  body('email')
+    .isEmail()
+    .withMessage('Valid email is required')
+    .normalizeEmail(),
+  body('identifier')
+    .notEmpty()
+    .withMessage('ID number or Business registration number is required')
+    .custom((value) => {
+      // Check if it's a 13-digit ID number or business registration format
+      if (/^\d{13}$/.test(value)) {
+        return true; // Valid SA ID number
+      }
+      if (/^\d{10}\/\d{2}\/\d{2}$/.test(value) || /^\d{4}\/\d{6}\/\d{2}$/.test(value)) {
+        return true; // Valid business registration number
+      }
+      throw new Error('Must be a valid 13-digit ID number or business registration number');
+    }),
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Password is required')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, identifier, password } = req.body;
+
+    logger.info(`🔍 Verifying credentials for email: ${email}`);
+
+    // Find user by email
+    const user = await User.findOne({ where: { email } });
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Account not found',
+        code: 'ACCOUNT_NOT_FOUND'
+      });
+    }
+
+    // Check identifier (ID number or business registration)
+    const isIdNumber = /^\d{13}$/.test(identifier);
+    const isBusinessNumber = /^\d{10}\/\d{2}\/\d{2}$/.test(identifier) || /^\d{4}\/\d{6}\/\d{2}$/.test(identifier);
+
+    let identifierMatch = false;
+    if (isIdNumber && user.id_number === identifier) {
+      identifierMatch = true;
+    } else if (isBusinessNumber && user.business_registration_number === identifier) {
+      identifierMatch = true;
+    }
+
+    if (!identifierMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid ID number or business registration number',
+        code: 'INVALID_IDENTIFIER'
+      });
+    }
+
+    // Verify password
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid password',
+        code: 'INVALID_PASSWORD'
+      });
+    }
+
+    // Check if user has a phone number for OTP
+    if (!user.phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: 'No phone number associated with this account. Please contact support.',
+        code: 'NO_PHONE_NUMBER'
+      });
+    }
+
+    // Generate and store OTP
+    const otp = generateOTP();
+    const otpKey = `${user.id}_${Date.now()}`;
+    const otpExpiry = Date.now() + (60 * 1000); // 60 seconds
+
+    otpStorage.set(otpKey, {
+      userId: user.id,
+      otp,
+      email: user.email,
+      expiresAt: otpExpiry,
+      attempts: 0
+    });
+
+    // Send OTP to user's phone
+    const smsResult = await sendOTP(user.phone_number, otp);
+    
+    if (!smsResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP. Please try again.',
+        code: 'OTP_SEND_FAILED'
+      });
+    }
+
+    logger.info(`✅ OTP sent to ${user.phone_number} for user ${user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Credentials verified. OTP sent to your registered phone number.',
+      data: {
+        otpKey,
+        phoneNumber: `***${user.phone_number.slice(-4)}`, // Masked phone number
+        expiresIn: 60 // seconds
+      }
+    });
+
+  } catch (error) {
+    logger.error('Credential verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during credential verification'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/login/verify-otp
+ * @desc    Verify OTP and complete login
+ * @access  Public
+ */
+router.post('/login/verify-otp', [
+  body('otpKey')
+    .notEmpty()
+    .withMessage('OTP key is required'),
+  body('otp')
+    .isLength({ min: 6, max: 6 })
+    .isNumeric()
+    .withMessage('OTP must be a 6-digit number')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { otpKey, otp } = req.body;
+
+    logger.info(`🔍 Verifying OTP for key: ${otpKey}`);
+
+    // Retrieve OTP data
+    const otpData = otpStorage.get(otpKey);
+    
+    if (!otpData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired OTP session',
+        code: 'INVALID_OTP_SESSION'
+      });
+    }
+
+    // Check if OTP has expired
+    if (Date.now() > otpData.expiresAt) {
+      otpStorage.delete(otpKey);
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired. Please request a new one.',
+        code: 'OTP_EXPIRED'
+      });
+    }
+
+    // Check attempt limit (max 3 attempts)
+    if (otpData.attempts >= 3) {
+      otpStorage.delete(otpKey);
+      return res.status(429).json({
+        success: false,
+        message: 'Too many failed attempts. Please start login process again.',
+        code: 'TOO_MANY_ATTEMPTS'
+      });
+    }
+
+    // Verify OTP
+    if (otpData.otp !== otp) {
+      otpData.attempts += 1;
+      otpStorage.set(otpKey, otpData);
+      
+      return res.status(401).json({
+        success: false,
+        message: `Invalid OTP. ${3 - otpData.attempts} attempts remaining.`,
+        code: 'INVALID_OTP',
+        attemptsRemaining: 3 - otpData.attempts
+      });
+    }
+
+    // OTP is correct, clean up and get user data
+    otpStorage.delete(otpKey);
+    
+    const user = await User.findByPk(otpData.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id,
+        email: user.email,
+        username: user.username,
+        idNumber: user.id_number,
+        businessNumber: user.business_registration_number
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Update last login
+    await user.update({ last_login: new Date() });
+
+    logger.info(`✅ User ${user.email} logged in successfully`);
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          idNumber: user.id_number,
+          businessNumber: user.business_registration_number,
+          dateOfBirth: user.date_of_birth,
+          gender: user.gender,
+          phoneNumber: user.phone_number,
+          taxNumber: user.tax_number,
+          homeAffairsVerified: user.home_affairs_verified,
+          isActive: user.is_active,
+          isVerified: user.is_verified,
+          accountType: user.business_registration_number ? 'business' : 'individual',
+          lastLogin: user.last_login
+        },
+        token,
+        expiresIn: '24h'
+      }
+    });
+
+  } catch (error) {
+    logger.error('OTP verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during OTP verification'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/login/resend-otp
+ * @desc    Resend OTP to user's phone number
+ * @access  Public
+ */
+router.post('/login/resend-otp', [
+  body('otpKey')
+    .notEmpty()
+    .withMessage('OTP key is required')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { otpKey } = req.body;
+
+    logger.info(`🔍 Resending OTP for key: ${otpKey}`);
+
+    // Retrieve OTP data
+    const otpData = otpStorage.get(otpKey);
+    
+    if (!otpData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid OTP session. Please start login process again.',
+        code: 'INVALID_OTP_SESSION'
+      });
+    }
+
+    // Get user data
+    const user = await User.findByPk(otpData.userId);
+    if (!user) {
+      otpStorage.delete(otpKey);
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    // Generate new OTP
+    const newOtp = generateOTP();
+    const newOtpExpiry = Date.now() + (60 * 1000); // 60 seconds
+
+    // Update OTP data
+    otpStorage.set(otpKey, {
+      ...otpData,
+      otp: newOtp,
+      expiresAt: newOtpExpiry,
+      attempts: 0 // Reset attempts
+    });
+
+    // Send new OTP
+    const smsResult = await sendOTP(user.phone_number, newOtp);
+    
+    if (!smsResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP. Please try again.',
+        code: 'OTP_SEND_FAILED'
+      });
+    }
+
+    logger.info(`✅ New OTP sent to ${user.phone_number} for user ${user.email}`);
+
+    res.json({
+      success: true,
+      message: 'New OTP sent to your registered phone number.',
+      data: {
+        phoneNumber: `***${user.phone_number.slice(-4)}`, // Masked phone number
+        expiresIn: 60 // seconds
+      }
+    });
+
+  } catch (error) {
+    logger.error('OTP resend error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during OTP resend'
+    });
+  }
 });
 
 export default router;

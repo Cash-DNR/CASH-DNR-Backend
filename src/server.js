@@ -16,6 +16,7 @@ import transactionRoutes from './routes/transactions.js';
 import adminRoutes from './routes/admin.js';
 import profileRoutes from './routes/profile.js';
 import usersRoutes from './routes/users.js';
+import uploadRoutes from './routes/upload.js';
 
 // Import database configuration
 import './config/database.js';
@@ -107,8 +108,8 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.get('/health', (req, res) => res.json({ status: 'healthy' }));
 
 // API Routes with debug logging
-app.use('/api', (req, res, next) => {
-  console.log('⚡ Hit /api route handler');
+app.use('/api/auth', (req, res, next) => {
+  console.log('⚡ Hit /api/auth route handler');
   next();
 }, authRoutes);
 
@@ -118,6 +119,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Debug middleware for unmatched routes
 app.use((req, res) => {
