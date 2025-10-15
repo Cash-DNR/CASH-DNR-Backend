@@ -11,6 +11,7 @@ import { Op } from 'sequelize';
 import User from '../models/User.js';
 import { verifyIdWithHomeAffairs } from '../services/homeAffairs.js';
 import { sarsComplianceChecker, generateTaxNumber } from '../services/SARS.js';
+import TaxNumberGenerationService from '../services/taxNumberGenerationService.js';
 import logger from '../services/logger.js';
 import { upload as registrationUpload } from '../controllers/fileController.js';
 import File from '../models/File.js';
@@ -451,9 +452,12 @@ router.post('/register', [
       });
     }
 
-    const { email, password, idNumber, homeAddress, phoneNumber } = req.body;
+    const { contactInfo, idNumber, homeAddress, phoneNumber } = req.body;
+    const { email, phone } = contactInfo || {};
 
     logger.info(`🔍 Starting registration for ID: ${idNumber}`);
+    logger.info(`🔍 Debug - contactInfo: ${JSON.stringify(contactInfo)}`);
+    logger.info(`🔍 Debug - email: ${email}, phone: ${phone}`);
 
     // Check if email is already registered
     const existingEmailUser = await User.findOne({ where: { email } });
@@ -521,16 +525,31 @@ router.post('/register', [
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Check if user already has a tax number from Home Affairs data, if not generate one
-    let taxNumber = homeAffairsData.taxNumber || homeAffairsData.taxId;
-    if (!taxNumber) {
-      taxNumber = generateTaxNumber(idNumber);
-      console.log(`🔢 Generated tax number: ${taxNumber}`);
+    // Phase 1: Automatic Tax Number Generation
+    logger.info(`🔢 Phase 1: Starting tax number generation for user: ${homeAffairsData.firstName} ${homeAffairsData.lastName}`);
+    
+    const taxGenerationResult = await TaxNumberGenerationService.generateForUser({
+      id_number: idNumber,
+      first_name: homeAffairsData.firstName,
+      last_name: homeAffairsData.lastName,
+      date_of_birth: homeAffairsData.dateOfBirth
+    });
+
+    let taxNumber;
+    let taxNumberSource = 'none';
+    
+    if (taxGenerationResult.success) {
+      taxNumber = taxGenerationResult.taxNumber;
+      taxNumberSource = taxGenerationResult.isExisting ? 'existing_sars' : 'generated';
+      logger.info(`✅ Tax number ${taxNumberSource}: ${taxNumber}`);
     } else {
-      console.log(`✅ Using existing tax number from Home Affairs: ${taxNumber}`);
+      // Fallback to existing tax number from Home Affairs or generate basic one
+      taxNumber = homeAffairsData.taxNumber || homeAffairsData.taxId || generateTaxNumber(idNumber);
+      taxNumberSource = 'fallback';
+      logger.warn(`⚠️ Tax generation service failed, using fallback: ${taxNumber}`);
     }
 
-    // Create user with Home Affairs data
+    // Phase 1: Create user with Home Affairs data and Phase 1 initialization
     const newUser = await User.create({
       username,
       email,
@@ -545,7 +564,22 @@ router.post('/register', [
       phone_number: phoneNumber || null,
       home_affairs_verified: true,
       is_verified: false,
-      is_active: true
+      is_active: true,
+      // Phase 1 specific fields
+      registration_phase: 'phase_1_complete',
+      cash_notes_enabled: true,
+      digital_wallet_enabled: true,
+      phase_1_completed_at: new Date()
+    });
+
+    // Phase 1: Log successful registration with audit trail
+    const { transactionLoggingService } = await import('../services/transactionLoggingService.js');
+    await transactionLoggingService.logUserRegistration(newUser, {
+      phase: 'phase_1',
+      homeAffairsVerified: true,
+      taxNumberGenerated: taxNumberSource !== 'existing_sars',
+      taxNumberSource,
+      registrationMethod: 'web_app'
     });
 
     // Generate JWT token
@@ -585,7 +619,27 @@ router.post('/register', [
           homeAddress: !homeAddress,
           phoneNumber: !phoneNumber
         },
-        taxNumberGenerated: !homeAffairsData.taxNumber && !homeAffairsData.taxId,
+        // Phase 1 Registration Data
+        phase1Registration: {
+          completed: true,
+          taxNumberGenerated: taxNumberSource === 'generated',
+          taxNumberSource,
+          homeAffairsVerified: true,
+          cashNotesEnabled: true,
+          digitalWalletEnabled: true,
+          nextSteps: [
+            'Complete profile information',
+            'Upload required documents',
+            'Start scanning cash notes',
+            'Set up digital wallet preferences'
+          ]
+        },
+        taxInformation: {
+          taxNumber,
+          source: taxNumberSource,
+          sarsRegistered: taxGenerationResult.success && !taxGenerationResult.isExisting,
+          message: taxGenerationResult.message || 'Tax number ready for use'
+        },
         homeAffairsVerification: {
           verified: true,
           source: 'home-affairs-api',
