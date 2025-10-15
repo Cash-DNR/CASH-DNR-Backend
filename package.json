@@ -12,7 +12,6 @@
     "start:prod": "set NODE_ENV=production&& node src/server.js",
     "migrate": "node src/utils/databaseSetup.js",
     "migrate:phase1": "node -e \"import('./src/migrations/20241217_002_phase1_foundational_operations.js').then(m => m.up()).then(() => console.log('✅ Phase 1 migration completed!')).catch(console.error)\"",
-    "migrate:production": "node migrate-production.js",
     "migrate:rollback": "node -e \"import('./src/migrations/20241217_002_phase1_foundational_operations.js').then(m => m.down()).then(() => console.log('✅ Migration rolled back!')).catch(console.error)\"",
     "db:setup": "node src/utils/databaseSetup.js",
     "db:seed": "node src/utils/seedDatabase.js",
