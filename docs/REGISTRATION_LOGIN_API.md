@@ -12,12 +12,12 @@ The CASH-DNR Authentication API provides secure user registration and login func
 | Method | Endpoint | Description | Auth Required | Status |
 |--------|----------|-------------|---------------|--------|
 | POST | `/citizen` | **🔒 Registration with password** (Your use case) | No | **Active** |
-| POST | `/register` | Registration without password | No | Active |
 | POST | `/verify-id` | Verify South African ID number | No | Active |
 | POST | `/login` | User login with credentials | No | Active |
 | POST | `/login/verify-credentials` | Step 1: Verify credentials & send OTP | No | Active |
 | POST | `/login/verify-otp` | Step 2: Verify OTP & complete login | No | Active |
 | POST | `/login/resend-otp` | Resend OTP to phone number | No | Active |
+| POST | `/register-with-documents` | **📄 Registration + Document Upload** | No | Active |
 | PUT | `/complete-profile` | Complete user profile | Yes | Active |
 
 ## 🎯 **Endpoint Recommendations**
@@ -28,14 +28,17 @@ The CASH-DNR Authentication API provides secure user registration and login func
 - **Home Affairs & SARS integration**
 - **Immediate login capability**
 - **Full address collection**
+- **⚠️ NO document upload** - Basic info only
 
-### **🔄 ALTERNATIVE: `/register`**
-- **No password required** (auto-generated)
-- **Optional address** collection
-- **Enhanced validation** for South African formats
-- **User must reset password** to login
+### **� DOCUMENT UPLOAD: Use `/register-with-documents`**
+- **Password + Documents** in one request
+- **Required documents**: ID, Proof of residence
+- **Optional documents**: Bank statements, other docs
+- **Complete registration** with verification
+- **Multipart/form-data** format required
 
-**💡 Since you require passwords, use `/citizen` endpoint for registration.**
+**💡 For passwords + documents: Use `/register-with-documents`**  
+**💡 For passwords only: Use `/citizen`**
 
 ---
 
@@ -69,128 +72,7 @@ The CASH-DNR Authentication API provides secure user registration and login func
 
 ## 📝 API Endpoints
 
-### 1. POST `/register` - User Registration
-
-Complete user registration with Home Affairs verification and automatic tax number generation.
-
-**URL**: `/api/auth/register`  
-**Method**: `POST`  
-**Auth Required**: No  
-**Content-Type**: `application/json`
-
-#### Request Body
-
-```json
-{
-  "idNumber": "9105289012088",
-  "contactInfo": {
-    "email": "john.doe@example.com",
-    "phone": "+27 82 123 4567"
-  },
-  "homeAddress": {
-    "streetAddress": "123 Main Street",
-    "town": "Sandton",
-    "city": "Johannesburg", 
-    "province": "Gauteng",
-    "postalCode": "2196"
-  },
-  "phoneNumber": "+27821234567"
-}
-```
-
-#### Field Validation
-
-| Field | Type | Required | Validation |
-|-------|------|----------|------------|
-| `idNumber` | string | Yes | Exactly 13 digits |
-| `contactInfo.email` | string | Yes | Valid email format |
-| `contactInfo.phone` | string | Yes | Format: `+27 XX XXX XXXX` |
-| `homeAddress` | object | Optional | Complete address object |
-| `phoneNumber` | string | Optional | 10-20 characters |
-
-#### Success Response (201)
-
-```json
-{
-  "success": true,
-  "message": "User registered successfully with Home Affairs and SARS verification",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "username": "john.doe91052",
-      "email": "john.doe@example.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "fullName": "John Doe",
-      "idNumber": "9105289012088",
-      "dateOfBirth": "1991-05-28",
-      "gender": "Male",
-      "phoneNumber": "+27821234567",
-      "taxNumber": "9105289012088001",
-      "homeAffairsVerified": true,
-      "isActive": true,
-      "isVerified": false,
-      "registrationPhase": "phase_1_complete",
-      "cashNotesEnabled": true,
-      "digitalWalletEnabled": true,
-      "cashHoldingLimit": "25000.00",
-      "createdAt": "2025-10-17T12:00:00.000Z"
-    },
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "tokenExpiresIn": "24h",
-    "registrationComplete": true,
-    "homeAffairsVerification": {
-      "verified": true,
-      "source": "home_affairs_api",
-      "verificationDate": "2025-10-17T12:00:00.000Z"
-    },
-    "taxGeneration": {
-      "taxNumber": "9105289012088001",
-      "source": "sars_api",
-      "generatedAt": "2025-10-17T12:00:00.000Z"
-    }
-  }
-}
-```
-
-#### Error Responses
-
-**Validation Error (400)**
-```json
-{
-  "success": false,
-  "message": "Validation failed",
-  "errors": [
-    {
-      "type": "field",
-      "msg": "South African ID number must be exactly 13 digits",
-      "path": "idNumber",
-      "location": "body"
-    }
-  ]
-}
-```
-
-**ID Already Registered (400)**
-```json
-{
-  "success": false,
-  "message": "This ID number is already registered"
-}
-```
-
-**Home Affairs Verification Failed (400)**
-```json
-{
-  "success": false,
-  "message": "ID number not found in Home Affairs database",
-  "details": "Unable to verify identity with Home Affairs"
-}
-```
-
----
-
-### 2. POST `/citizen` - Registration with Password (Your Use Case)
+### 1. POST `/citizen` - Registration with Password (Your Use Case)
 
 Complete user registration with password, Home Affairs verification, and Phase 1 features.
 
@@ -298,7 +180,7 @@ Complete user registration with password, Home Affairs verification, and Phase 1
 
 ---
 
-### 3. POST `/verify-id` - ID Verification
+### 2. POST `/verify-id` - ID Verification
 
 Verify a South African ID number with Home Affairs database before registration.
 
@@ -368,7 +250,7 @@ Verify a South African ID number with Home Affairs database before registration.
 
 ---
 
-### 4. POST `/login` - User Login
+### 3. POST `/login` - User Login
 
 Authenticate user with email and password.
 
@@ -436,7 +318,7 @@ Authenticate user with email and password.
 
 ---
 
-### 6. POST `/login/verify-credentials` - Two-Factor Authentication Step 1
+### 4. POST `/login/verify-credentials` - Two-Factor Authentication Step 1
 
 Verify user credentials (email, ID/business number, password) and send OTP to registered phone number.
 
@@ -517,7 +399,7 @@ Verify user credentials (email, ID/business number, password) and send OTP to re
 
 ---
 
-### 7. POST `/login/verify-otp` - Two-Factor Authentication Step 2
+### 5. POST `/login/verify-otp` - Two-Factor Authentication Step 2
 
 Verify the OTP code and complete the login process.
 
@@ -614,7 +496,7 @@ Verify the OTP code and complete the login process.
 
 ---
 
-### 8. POST `/login/resend-otp` - Resend OTP
+### 6. POST `/login/resend-otp` - Resend OTP
 
 Resend OTP to the user's registered phone number if the previous OTP expired or was not received.
 
@@ -661,6 +543,175 @@ Resend OTP to the user's registered phone number if the previous OTP expired or 
   "success": false,
   "message": "User not found",
   "code": "USER_NOT_FOUND"
+}
+```
+
+---
+
+### 7. POST `/register-with-documents` - Registration with Document Upload
+
+Complete user registration with password and required documents in a single request.
+
+**URL**: `/api/auth/register-with-documents`  
+**Method**: `POST`  
+**Auth Required**: No  
+**Content-Type**: `multipart/form-data`
+
+#### Request Body (Form Data)
+
+```javascript
+// Form fields
+email: "john.doe@example.com"
+password: "SecurePassword123!"
+idNumber: "9105289012088"
+phoneNumber: "+27821234567"
+homeAddress: JSON.stringify({
+  "streetAddress": "123 Main Street",
+  "town": "Sandton", 
+  "city": "Johannesburg",
+  "province": "Gauteng",
+  "postalCode": "2196"
+})
+
+// Required file uploads
+id_document: [File] (up to 5 files)
+proof_of_residence: [File] (up to 5 files)
+
+// Optional file uploads  
+bank_statement: [File] (up to 5 files)
+other_documents: [File] (up to 20 files)
+```
+
+#### Field Validation
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `email` | string | Yes | Valid email format |
+| `password` | string | Yes | Minimum 6 characters |
+| `idNumber` | string | Yes | Exactly 13 digits |
+| `phoneNumber` | string | Optional | South African format |
+| `homeAddress` | JSON string | Optional | Complete address object |
+| `id_document` | Files | Yes | Up to 5 files (PDF, JPG, PNG) |
+| `proof_of_residence` | Files | Yes | Up to 5 files (PDF, JPG, PNG) |
+| `bank_statement` | Files | Optional | Up to 5 files |
+| `other_documents` | Files | Optional | Up to 20 files |
+
+#### Success Response (201)
+
+```json
+{
+  "success": true,
+  "message": "User registered successfully with documents uploaded",
+  "data": {
+    "user": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "username": "john.doe91052",
+      "email": "john.doe@example.com",
+      "firstName": "John",
+      "lastName": "Doe",
+      "idNumber": "9105289012088",
+      "phoneNumber": "+27821234567",
+      "taxNumber": "9105289012088001",
+      "homeAffairsVerified": true,
+      "isActive": true,
+      "documentsUploaded": true,
+      "documentCount": 4
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "uploadedFiles": {
+      "id_document": ["id_front_550e8400.jpg", "id_back_550e8400.jpg"],
+      "proof_of_residence": ["utility_bill_550e8400.pdf"],
+      "bank_statement": ["statement_550e8400.pdf"]
+    },
+    "homeAffairsVerification": {
+      "verified": true,
+      "verificationDate": "2025-10-18T12:00:00.000Z"
+    }
+  }
+}
+```
+
+#### Error Responses
+
+**Missing Required Documents (400)**
+```json
+{
+  "success": false,
+  "message": "id_document and proof_of_residence are required"
+}
+```
+
+**User Already Exists (400)**
+```json
+{
+  "success": false,
+  "message": "This email is already registered"
+}
+```
+
+**File Upload Error (400)**
+```json
+{
+  "success": false,
+  "message": "File upload failed",
+  "details": "Unsupported file type. Only PDF, JPG, PNG allowed"
+}
+```
+
+---
+
+### 8. Document Upload Endpoints (After Registration)
+
+For users who registered without documents and need to upload them later.
+
+#### 8a. POST `/upload/single` - Upload Single Document
+
+**URL**: `http://localhost:3000/api/upload/single`  
+**Method**: `POST`  
+**Auth Required**: Yes  
+**Content-Type**: `multipart/form-data`  
+**Headers**: `Authorization: Bearer <jwt-token>`
+
+```javascript
+// Form data
+file: [File] // Single file upload
+category: "id_document" // Optional category
+description: "Front side of ID document" // Optional description
+```
+
+#### 8b. POST `/upload/multiple` - Upload Multiple Documents
+
+**URL**: `http://localhost:3000/api/upload/multiple`  
+**Method**: `POST`  
+**Auth Required**: Yes  
+**Content-Type**: `multipart/form-data`  
+**Headers**: `Authorization: Bearer <jwt-token>`
+
+```javascript
+// Form data
+files: [File, File, File] // Multiple files (up to 10)
+category: "bank_statements" // Optional category
+```
+
+#### Document Upload Success Response
+
+```json
+{
+  "success": true,
+  "message": "Files uploaded successfully",
+  "data": {
+    "uploadedFiles": [
+      {
+        "id": "file_550e8400",
+        "filename": "document_550e8400.pdf",
+        "originalName": "my_document.pdf",
+        "size": 245760,
+        "category": "id_document",
+        "uploadedAt": "2025-10-18T12:00:00.000Z"
+      }
+    ],
+    "totalUploaded": 1
+  }
 }
 ```
 
@@ -764,6 +815,67 @@ const registerUser = async (userData) => {
     }
   } catch (error) {
     console.error('Registration failed:', error);
+    throw error;
+  }
+};
+
+// Registration with Documents Upload
+const registerWithDocuments = async (formData) => {
+  try {
+    const response = await fetch('http://localhost:3000/api/auth/register-with-documents', {
+      method: 'POST',
+      body: formData // FormData object with files and fields
+      // Note: Don't set Content-Type header, browser will set it automatically for FormData
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      localStorage.setItem('cashDnrToken', result.data.token);
+      console.log(`Uploaded ${result.data.uploadedFiles.length} documents`);
+      return result.data.user;
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (error) {
+    console.error('Registration with documents failed:', error);
+    throw error;
+  }
+};
+
+// Upload documents after registration
+const uploadDocuments = async (files, category = '') => {
+  const token = localStorage.getItem('cashDnrToken');
+  const formData = new FormData();
+  
+  if (Array.isArray(files)) {
+    files.forEach(file => formData.append('files', file));
+  } else {
+    formData.append('file', files);
+  }
+  
+  if (category) formData.append('category', category);
+  
+  try {
+    const endpoint = Array.isArray(files) ? '/multiple' : '/single';
+    const response = await fetch(`http://localhost:3000/api/upload${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log(`Uploaded ${result.data.totalUploaded} files`);
+      return result.data;
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (error) {
+    console.error('Document upload failed:', error);
     throw error;
   }
 };
@@ -885,7 +997,7 @@ const makeAuthenticatedRequest = async (url, options = {}) => {
 ### cURL Examples
 
 ```bash
-# Register User with Password (Your use case)
+# Register User with Password (Basic info only)
 curl -X POST http://localhost:3000/api/auth/citizen \
   -H "Content-Type: application/json" \
   -d '{
@@ -903,6 +1015,27 @@ curl -X POST http://localhost:3000/api/auth/citizen \
     },
     "password": "SecurePassword123!"
   }'
+
+# Register User with Documents (Password + Files)
+curl -X POST http://localhost:3000/api/auth/register-with-documents \
+  -F "email=john.doe@example.com" \
+  -F "password=SecurePassword123!" \
+  -F "idNumber=9105289012088" \
+  -F "phoneNumber=+27821234567" \
+  -F 'homeAddress={"streetAddress":"123 Main Street","town":"Sandton","city":"Johannesburg","province":"Gauteng","postalCode":"2196"}' \
+  -F "id_document=@/path/to/id_front.jpg" \
+  -F "id_document=@/path/to/id_back.jpg" \
+  -F "proof_of_residence=@/path/to/utility_bill.pdf" \
+  -F "bank_statement=@/path/to/bank_statement.pdf"
+
+# Upload Documents After Registration (requires auth token)
+curl -X POST http://localhost:3000/api/upload/multiple \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -F "files=@/path/to/document1.pdf" \
+  -F "files=@/path/to/document2.jpg" \
+  -F "category=additional_documents"
+
+
 
 # Two-Factor Authentication Login (2FA)
 curl -X POST http://localhost:3000/api/auth/login/verify-credentials \
