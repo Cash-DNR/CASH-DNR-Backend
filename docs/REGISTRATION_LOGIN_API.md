@@ -9,13 +9,30 @@ The CASH-DNR Authentication API provides secure user registration and login func
 
 ## 📋 Quick Reference
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| POST | `/register` | Main user registration with Home Affairs verification | No |
-| POST | `/verify-id` | Verify South African ID number | No |
-| POST | `/login` | User login with credentials | No |
-| POST | `/citizen` | Legacy registration endpoint | No |
-| PUT | `/complete-profile` | Complete user profile | Yes |
+| Method | Endpoint | Description | Auth Required | Status |
+|--------|----------|-------------|---------------|--------|
+| POST | `/citizen` | **🔒 Registration with password** (Your use case) | No | **Active** |
+| POST | `/register` | Registration without password | No | Active |
+| POST | `/verify-id` | Verify South African ID number | No | Active |
+| POST | `/login` | User login with credentials | No | Active |
+| PUT | `/complete-profile` | Complete user profile | Yes | Active |
+
+## 🎯 **Endpoint Recommendations**
+
+### **🔒 PASSWORD REQUIRED: Use `/citizen`** 
+- **Password in registration** request (your requirement)
+- **Complete Phase 1 features** 
+- **Home Affairs & SARS integration**
+- **Immediate login capability**
+- **Full address collection**
+
+### **🔄 ALTERNATIVE: `/register`**
+- **No password required** (auto-generated)
+- **Optional address** collection
+- **Enhanced validation** for South African formats
+- **User must reset password** to login
+
+**💡 Since you require passwords, use `/citizen` endpoint for registration.**
 
 ---
 
@@ -25,12 +42,18 @@ The CASH-DNR Authentication API provides secure user registration and login func
 - Valid South African ID number (13 digits)
 - Valid email address
 - Phone number in South African format: `+27 XX XXX XXXX`
-- Strong password (minimum 6 characters)
+- **Strong password** (minimum 6 characters)
+- Complete home address (required for `/citizen` endpoint)
 
-### Authentication Flow
-1. **Register** → Verify ID with Home Affairs → Generate tax number → Create account
-2. **Login** → Validate credentials → Generate JWT token
+### Authentication Flow (With Password)
+1. **Register** → Provide password + details → Verify ID with Home Affairs → Generate tax number → Create account
+2. **Login** → Use email + password → Generate JWT token  
 3. **Use APIs** → Include JWT token in Authorization header
+
+### Password Requirements
+- **Minimum length**: 6 characters
+- **Security**: Password is hashed with bcrypt (10 salt rounds)
+- **Usage**: Required for `/citizen` endpoint, optional for `/register`
 
 ---
 
@@ -157,7 +180,115 @@ Complete user registration with Home Affairs verification and automatic tax numb
 
 ---
 
-### 2. POST `/verify-id` - ID Verification
+### 2. POST `/citizen` - Registration with Password (Your Use Case)
+
+Complete user registration with password, Home Affairs verification, and Phase 1 features.
+
+**URL**: `/api/auth/citizen`  
+**Method**: `POST`  
+**Auth Required**: No  
+**Content-Type**: `application/json`
+
+#### Request Body
+
+```json
+{
+  "idNumber": "9105289012088",
+  "contactInfo": {
+    "email": "john.doe@example.com",
+    "phone": "+27 82 123 4567"
+  },
+  "homeAddress": {
+    "streetAddress": "123 Main Street",
+    "town": "Sandton",
+    "city": "Johannesburg",
+    "province": "Gauteng",
+    "postalCode": "2196"
+  },
+  "password": "SecurePassword123!"
+}
+```
+
+#### Field Validation
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `idNumber` | string | Yes | Exactly 13 digits |
+| `contactInfo.email` | string | Yes | Valid email format |
+| `contactInfo.phone` | string | Yes | Format: `+27 XX XXX XXXX` |
+| `homeAddress` | object | Yes | Complete address object required |
+| `password` | string | Yes | Minimum 6 characters |
+
+#### Success Response (201)
+
+```json
+{
+  "success": true,
+  "message": "Citizen registered successfully",
+  "data": {
+    "user": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "username": "john.doe91052",
+      "email": "john.doe@example.com",
+      "firstName": "John",
+      "lastName": "Doe",
+      "fullName": "John Doe",
+      "idNumber": "9105289012088",
+      "dateOfBirth": "1991-05-28",
+      "gender": "Male",
+      "phoneNumber": "+27821234567",
+      "taxNumber": "9105289012088001",
+      "homeAffairsVerified": true,
+      "isActive": true,
+      "isVerified": false,
+      "status": "pending_verification",
+      "userType": "Individual"
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "registrationComplete": true,
+    "missingInfo": {
+      "phoneNumber": false
+    }
+  }
+}
+```
+
+#### Error Responses
+
+**Missing Required Fields (400)**
+```json
+{
+  "success": false,
+  "error": "Missing required fields",
+  "missingFields": ["password", "homeAddress.streetAddress"],
+  "debug": {
+    "receivedFields": ["idNumber", "contactInfo"],
+    "contentType": "application/json"
+  }
+}
+```
+
+**User Already Exists (400)**
+```json
+{
+  "success": false,
+  "message": "User already registered",
+  "details": "Email already in use"
+}
+```
+
+**Home Affairs Verification Failed (400)**
+```json
+{
+  "success": false,
+  "message": "ID verification failed",
+  "details": "ID verification failed"
+}
+```
+
+---
+
+### 3. POST `/verify-id` - ID Verification
 
 Verify a South African ID number with Home Affairs database before registration.
 
@@ -227,7 +358,7 @@ Verify a South African ID number with Home Affairs database before registration.
 
 ---
 
-### 3. POST `/login` - User Login
+### 4. POST `/login` - User Login
 
 Authenticate user with email and password.
 
@@ -295,7 +426,7 @@ Authenticate user with email and password.
 
 ---
 
-### 4. PUT `/complete-profile` - Profile Completion
+### 5. PUT `/complete-profile` - Profile Completion
 
 Complete user profile with additional information.
 
@@ -371,10 +502,10 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### JavaScript/Frontend
 
 ```javascript
-// Registration
+// Registration with Password (Recommended for your use case)
 const registerUser = async (userData) => {
   try {
-    const response = await fetch('http://localhost:3000/api/auth/register', {
+    const response = await fetch('http://localhost:3000/api/auth/citizen', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -440,8 +571,8 @@ const makeAuthenticatedRequest = async (url, options = {}) => {
 ### cURL Examples
 
 ```bash
-# Register User
-curl -X POST http://localhost:3000/api/auth/register \
+# Register User with Password (Your use case)
+curl -X POST http://localhost:3000/api/auth/citizen \
   -H "Content-Type: application/json" \
   -d '{
     "idNumber": "9105289012088",
@@ -455,7 +586,8 @@ curl -X POST http://localhost:3000/api/auth/register \
       "city": "Johannesburg",
       "province": "Gauteng",
       "postalCode": "2196"
-    }
+    },
+    "password": "SecurePassword123!"
   }'
 
 # Login User
