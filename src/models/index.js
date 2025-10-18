@@ -8,6 +8,11 @@ import TaxId from './TaxId.js';
 import File from './File.js';
 import CashNote from './CashNote.js';
 import CashNoteTransfer from './CashNoteTransfer.js';
+import ChatRoom from './ChatRoom.js';
+import ChatMessage from './ChatMessage.js';
+import ChatRoomMember from './ChatRoomMember.js';
+import Notification from './Notification.js';
+import UserActivity from './UserActivity.js';
 
 // Define associations
 User.hasMany(Transaction, { foreignKey: 'user_id' });
@@ -71,6 +76,33 @@ CashNoteTransfer.belongsTo(User, { foreignKey: 'disputed_by', as: 'disputeInitia
 User.hasMany(CashNoteTransfer, { foreignKey: 'reversed_by', as: 'reversedTransfers' });
 CashNoteTransfer.belongsTo(User, { foreignKey: 'reversed_by', as: 'reversalInitiator' });
 
+// Real-time Chat associations
+User.hasMany(ChatRoom, { foreignKey: 'created_by', as: 'createdRooms' });
+ChatRoom.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+ChatRoom.hasMany(ChatRoomMember, { foreignKey: 'room_id', as: 'members' });
+ChatRoomMember.belongsTo(ChatRoom, { foreignKey: 'room_id', as: 'room' });
+
+User.hasMany(ChatRoomMember, { foreignKey: 'user_id', as: 'roomMemberships' });
+ChatRoomMember.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+ChatRoom.hasMany(ChatMessage, { foreignKey: 'room_id', as: 'messages' });
+ChatMessage.belongsTo(ChatRoom, { foreignKey: 'room_id', as: 'room' });
+
+User.hasMany(ChatMessage, { foreignKey: 'sender_id', as: 'sentMessages' });
+ChatMessage.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+
+ChatMessage.hasMany(ChatMessage, { foreignKey: 'reply_to_id', as: 'replies' });
+ChatMessage.belongsTo(ChatMessage, { foreignKey: 'reply_to_id', as: 'replyTo' });
+
+// Notification associations
+User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
+Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// User Activity associations
+User.hasMany(UserActivity, { foreignKey: 'user_id', as: 'activities' });
+UserActivity.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 // Export models and sequelize instance
 export {
   sequelize,
@@ -82,7 +114,12 @@ export {
   TaxId,
   File,
   CashNote,
-  CashNoteTransfer
+  CashNoteTransfer,
+  ChatRoom,
+  ChatMessage,
+  ChatRoomMember,
+  Notification,
+  UserActivity
 };
 
 export default {

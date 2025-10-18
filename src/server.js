@@ -1,4 +1,6 @@
 import express from 'express';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import fileUpload from 'express-fileupload';
 import morgan from 'morgan';
@@ -18,6 +20,9 @@ import profileRoutes from './routes/profile.js';
 import usersRoutes from './routes/users.js';
 import uploadRoutes from './routes/upload.js';
 import cashNotesRoutes from './routes/cashNotes.js';
+// import chatRoutes from './routes/chat.js'; // Disabled - chat functionality removed
+import notificationsRoutes from './routes/notifications.js';
+import realtimeRoutes from './routes/realtime.js';
 
 // Import database configuration
 import './config/database.js';
@@ -27,6 +32,17 @@ import logger from './services/logger.js';
 dotenv.config();
 
 const app = express();
+const server = createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Authorization"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -124,6 +140,27 @@ app.use('/api/upload', uploadRoutes);
 // Phase 1 - Cash Notes API
 app.use('/api/cash-notes', cashNotesRoutes);
 
+// Real-time features API (chat disabled)
+// app.use('/api/chat', chatRoutes); // Disabled - chat functionality removed
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/realtime', realtimeRoutes);
+
+// Handle WebSocket endpoint requests (placeholder)
+app.get('/ws', (req, res) => {
+  console.log('📡 WebSocket endpoint accessed - returning info message');
+  res.status(200).json({ 
+    success: false,
+    message: 'WebSocket endpoint not implemented',
+    info: 'This endpoint is for WebSocket connections which are not currently supported',
+    availableEndpoints: {
+      health: '/health',
+      auth: '/api/auth/*',
+      upload: '/api/upload/*',
+      cashNotes: '/api/cash-notes/*'
+    }
+  });
+});
+
 // Debug middleware for unmatched routes
 app.use((req, res) => {
   console.log('❌ No route matched for:', req.method, req.url);
@@ -177,8 +214,15 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+
+// Import and initialize Socket.IO handlers
+import { initializeSocketHandlers } from './services/realtimeService.js';
+initializeSocketHandlers(io);
+
+server.listen(PORT, () => {
   logger.info(`🚀 Server running on port ${PORT}`);
+  logger.info(`📡 WebSocket server ready on ws://localhost:${PORT}`);
 });
 
 export default app;
+export { io };
