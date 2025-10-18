@@ -61,13 +61,27 @@ try {
 }
 
 // Configure file upload middleware first (before other middleware)
-app.use(fileUpload({
+// Only apply to upload routes to avoid warning on non-file requests
+app.use('/api/upload', fileUpload({
     createParentPath: true,
     parseNested: true,
     useTempFiles: true,
     tempFileDir: path.join(__dirname, '..', 'tmp'),
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    debug: true
+    debug: false,
+    safeFileNames: true,
+    preserveExtension: true
+}));
+
+app.use('/api/auth/register-with-documents', fileUpload({
+    createParentPath: true,
+    parseNested: true,
+    useTempFiles: true,
+    tempFileDir: path.join(__dirname, '..', 'tmp'),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    debug: false,
+    safeFileNames: true,
+    preserveExtension: true
 }));
 
 // Debug middleware for multipart form data
@@ -121,8 +135,30 @@ app.use((req, res, next) => {
 // Static file serving
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'CASH-DNR Backend API',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth/*',
+      upload: '/api/upload/*',
+      cashNotes: '/api/cash-notes/*',
+      notifications: '/api/notifications/*',
+      realtime: '/api/realtime/*'
+    },
+    websocket: {
+      endpoint: 'ws://localhost:3000',
+      events: ['notification', 'balance_update', 'cash_note_update', 'activity_update']
+    }
+  });
+});
+
 // Mount all routes
-app.get('/health', (req, res) => res.json({ status: 'healthy' }));
+app.get('/health', (req, res) => res.json({ status: 'healthy', timestamp: new Date().toISOString() }));
 
 // API Routes with debug logging
 app.use('/api/auth', (req, res, next) => {
