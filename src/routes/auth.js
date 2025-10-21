@@ -16,6 +16,9 @@ import logger from '../services/logger.js';
 import { upload as registrationUpload } from '../controllers/fileController.js';
 import File from '../models/File.js';
 
+import smsService from '../services/smsService.js';
+import liveSMSService from '../services/liveSMSService.js';
+
 // In-memory OTP storage (in production, use Redis or database)
 const otpStorage = new Map();
 
@@ -24,12 +27,36 @@ const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-// Function to send OTP via SMS (mock implementation)
+// Function to send OTP via SMS using live SMS service
 const sendOTP = async (phoneNumber, otp) => {
-  // In production, integrate with SMS service like Twilio, AWS SNS, etc.
-  console.log(`📱 Sending OTP ${otp} to ${phoneNumber}`);
-  // Mock successful send
-  return { success: true, message: 'OTP sent successfully' };
+  try {
+    // Use live SMS service for sending OTP
+    const message = `Your CASH-DNR verification code is: ${otp}. This code expires in 10 minutes. Do not share this code with anyone.`;
+    const result = await liveSMSService.sendSMS(phoneNumber, message);
+    
+    if (result.success) {
+      logger.info(`✅ OTP sent successfully via ${result.provider} to ${phoneNumber.replace(/\d(?=\d{4})/g, '*')}`);
+      return {
+        success: true,
+        provider: result.provider,
+        messageId: result.messageId,
+        status: result.status,
+        phoneNumber: phoneNumber.replace(/\d(?=\d{4})/g, '*'), // Masked for security
+        sentAt: result.sentAt
+      };
+    } else {
+      throw new Error('SMS service returned failure status');
+    }
+  } catch (error) {
+    logger.error('❌ Failed to send OTP via SMS:', error.message);
+    
+    // Return error but don't expose internal details
+    return {
+      success: false,
+      message: 'Failed to send OTP. Please try again or contact support.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    };
+  }
 };
 
 // Function to extract date of birth from South African ID number
@@ -212,135 +239,102 @@ router.post('/citizen', async (req, res) => {
                 ]
             }
         });
-        // Continue with registration
+
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'User already registered',
+                details: existingUser.email === contactInfo.email ? 
+                    'Email already in use' : 'ID number already registered'
+            });
+        }
+
+        // Verify with Home Affairs
+        const verificationResult = await verifyIdWithHomeAffairs(idNumber);
+        if (!verificationResult.success) {
+            return res.status(400).json({
+                success: false,
+                message: verificationResult.message,
+                details: verificationResult.details || 'ID verification failed'
+            });
+        }
+
+        // Generate tax number if needed
+        const taxNumber = generateTaxNumber(idNumber);
+
+        // Generate username if not provided
+        const username = req.body.username || `user_${Date.now()}`;
+
+        // Extract date of birth from ID number
+        const dateOfBirth = extractDateOfBirth(idNumber);
+
+        // Create new user (password will be hashed by model hooks)
+        const user = await User.create({
+            id_number: idNumber,
+            username,
+            email: contactInfo.email,
+            phone_number: contactInfo.phone || null,
+            password_hash: password, // Pass plain password, model will hash it
+            first_name: verificationResult.data?.firstName || verificationResult.citizen?.firstName,
+            last_name: verificationResult.data?.lastName || verificationResult.citizen?.lastName,
+            date_of_birth: dateOfBirth,
+            tax_number: taxNumber,
+            home_address: homeAddress,
+            status: User.STATUS?.PENDING_VERIFICATION || 'pending_verification',
+            home_affairs_verified: true,
+            is_active: true,
+            is_verified: false
+        });
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { 
+                userId: user.id,
+                idNumber: user.id_number
+            },
+            process.env.JWT_SECRET || 'fallback-secret-key',
+            { expiresIn: '24h' }
+        );
+
+        res.status(201).json({
+            success: true,
+            message: 'Citizen registered successfully',
+            data: {
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    fullName: `${user.first_name} ${user.last_name}`,
+                    idNumber: user.id_number,
+                    dateOfBirth: user.date_of_birth,
+                    phoneNumber: user.phone_number,
+                    taxNumber: user.tax_number,
+                    homeAffairsVerified: user.home_affairs_verified,
+                    isActive: user.is_active,
+                    isVerified: user.is_verified,
+                    status: user.status,
+                    userType: 'Individual'
+                },
+                token,
+                registrationComplete: !!user.phone_number,
+                missingInfo: {
+                    phoneNumber: !user.phone_number
+                }
+            }
+        });
 
     } catch (error) {
         console.error('Error in /citizen route:', error);
+        logger.error('Registration error:', error);
         return res.status(500).json({
             success: false,
             error: 'Internal server error',
-            details: error.message
+            message: 'Registration failed due to server error',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
-  try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
-    }
-
-    const { idNumber, contactInfo, homeAddress } = req.body;
-
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [
-          { id_number: idNumber },
-          { email: contactInfo.email }
-        ]
-      }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User already registered',
-        details: existingUser.email === contactInfo.email ? 
-          'Email already in use' : 'ID number already registered'
-      });
-    }
-
-    // Verify with Home Affairs
-    const verificationResult = await verifyIdWithHomeAffairs(idNumber);
-    if (!verificationResult.success) {
-      return res.status(400).json({
-        success: false,
-        message: verificationResult.message,
-        details: verificationResult.details || 'ID verification failed'
-      });
-    }
-
-    // Generate tax number if needed
-    const taxNumber = generateTaxNumber(idNumber);
-
-    // Hash password
-    const password_hash = await bcrypt.hash(req.body.password, 10);
-
-    // Generate username if not provided
-    const username = req.body.username || `user_${Date.now()}`;
-
-    // Extract date of birth from ID number
-    const dateOfBirth = extractDateOfBirth(idNumber);
-
-    // Create new user
-    const user = await User.create({
-      id_number: idNumber,
-      username,
-      email: contactInfo.email,
-      phone_number: contactInfo.phone || null,
-      password_hash,
-      first_name: verificationResult.citizen.firstName,
-      last_name: verificationResult.citizen.lastName,
-      date_of_birth: dateOfBirth,
-      tax_number: taxNumber,
-      home_address: homeAddress,
-
-      status: User.STATUS.PENDING_VERIFICATION,
-      home_affairs_verified: true,
-      is_active: true,
-      is_verified: false
-    });
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user.id,
-        idNumber: user.idNumber
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Citizen registered successfully',
-      data: {
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          firstName: user.first_name,
-          lastName: user.last_name,
-          fullName: user.fullName,
-          idNumber: user.id_number,
-          dateOfBirth: user.date_of_birth,
-          gender: user.gender,
-          phoneNumber: user.phone_number,
-          taxNumber: user.tax_number,
-          homeAffairsVerified: user.home_affairs_verified,
-          isActive: user.is_active,
-          isVerified: user.is_verified,
-          status: user.status,
-          userType: 'Individual'
-        },
-        token,
-        registrationComplete: !!user.phone_number,
-        missingInfo: {
-          phoneNumber: !user.phone_number
-        }
-      }
-    });
-  } catch (error) {
-    logger.error('Registration error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error during registration'
-    });
-  }
 });
 
 /**
@@ -1190,22 +1184,35 @@ router.post('/login/verify-credentials', [
     const smsResult = await sendOTP(user.phone_number, otp);
     
     if (!smsResult.success) {
+      // Clean up OTP storage on SMS failure
+      otpStorage.delete(otpKey);
+      
       return res.status(500).json({
         success: false,
-        message: 'Failed to send OTP. Please try again.',
-        code: 'OTP_SEND_FAILED'
+        message: smsResult.message || 'Failed to send OTP. Please try again.',
+        code: 'OTP_SEND_FAILED',
+        ...(smsResult.error && process.env.NODE_ENV === 'development' && { 
+          error: smsResult.error 
+        })
       });
     }
 
-    logger.info(`✅ OTP sent to ${user.phone_number} for user ${user.email}`);
+    logger.info(`✅ OTP sent via ${smsResult.provider} to ${user.phone_number} for user ${user.email}`);
 
     res.json({
       success: true,
-      message: 'Credentials verified. OTP sent to your registered phone number.',
+      message: `Credentials verified. OTP sent via ${smsResult.provider.toUpperCase()} to your registered phone number.`,
       data: {
         otpKey,
         phoneNumber: `***${user.phone_number.slice(-4)}`, // Masked phone number
-        expiresIn: 60 // seconds
+        expiresIn: 60, // seconds
+        provider: smsResult.provider,
+        messageId: smsResult.messageId,
+        // Include OTP only in mock mode for testing
+        ...(smsResult.provider === 'mock' && { 
+          testOTP: smsResult.otp,
+          note: 'OTP included for testing purposes only'
+        })
       }
     });
 
@@ -1443,6 +1450,123 @@ router.post('/login/resend-otp', [
     res.status(500).json({
       success: false,
       message: 'Internal server error during OTP resend'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/login
+ * @desc    Simple user login with email and password
+ * @access  Public
+ */
+router.post('/login', [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email address'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+], async (req, res) => {
+  try {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, password } = req.body;
+
+    logger.info(`🔐 Login attempt for email: ${email}`);
+
+    // Find user by email
+    const user = await User.findOne({ 
+      where: { email: email.toLowerCase() } 
+    });
+
+    if (!user) {
+      logger.warn(`❌ Login failed - user not found: ${email}`);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Check if account is active
+    if (!user.is_active) {
+      logger.warn(`❌ Login failed - account inactive: ${email}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Account is deactivated. Please contact support.'
+      });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      logger.warn(`❌ Login failed - invalid password: ${email}`);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id,
+        email: user.email,
+        idNumber: user.id_number
+      },
+      process.env.JWT_SECRET || 'fallback-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    // Update last login
+    await user.update({ 
+      updated_at: new Date() 
+    });
+
+    logger.info(`✅ Login successful for user: ${email}`);
+
+    res.json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          fullName: `${user.first_name} ${user.last_name}`,
+          idNumber: user.id_number,
+          phoneNumber: user.phone_number,
+          taxNumber: user.tax_number,
+          homeAffairsVerified: user.home_affairs_verified,
+          isActive: user.is_active,
+          isVerified: user.is_verified,
+          role: 'user',
+          registrationPhase: 'phase_1_complete',
+          cashNotesEnabled: true,
+          digitalWalletEnabled: true,
+          lastLogin: new Date().toISOString()
+        },
+        token,
+        tokenExpiresIn: '24h',
+        loginTime: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during login',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
