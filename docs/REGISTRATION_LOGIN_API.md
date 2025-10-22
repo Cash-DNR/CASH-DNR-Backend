@@ -11,14 +11,12 @@ The CASH-DNR Authentication API provides secure user registration and login func
 
 | Method | Endpoint | Description | Auth Required | Status |
 |--------|----------|-------------|---------------|--------|
-| POST | `/citizen` | **🔒 Registration with password** (Your use case) | No | **Active** |
-| POST | `/verify-id` | Verify South African ID number | No | Active |
-| POST | `/login` | User login with credentials | No | Active |
-| POST | `/login/verify-credentials` | Step 1: Verify credentials & send OTP | No | Active |
-| POST | `/login/verify-otp` | Step 2: Verify OTP & complete login | No | Active |
-| POST | `/login/resend-otp` | Resend OTP to phone number | No | Active |
-| POST | `/register-with-documents` | **📄 Registration + Document Upload** | No | Active |
-| PUT | `/complete-profile` | Complete user profile | Yes | Active |
+| POST | `/citizen` | **🔒 Registration with password** (JSON only) | No | **Active** |
+| POST | `/register-with-documents` | **📄 Registration + Document Upload** | No | **Active** |
+| POST | `/login/check-email` | Check if email exists in system | No | **Active** |
+| POST | `/login/verify-credentials` | **Step 1**: Verify credentials & send OTP | No | **Active** |
+| POST | `/login/verify-otp` | **Step 2**: Verify OTP & complete login | No | **Active** |
+| GET | `/login/resend-otp` | Resend OTP to phone number | No | **Active** |
 
 ## 🎯 **Endpoint Recommendations**
 
@@ -51,12 +49,12 @@ The CASH-DNR Authentication API provides secure user registration and login func
 - **Strong password** (minimum 6 characters)
 - Complete home address (required for `/citizen` endpoint)
 
-### Authentication Flow (With Password)
-1. **Register** → Provide password + details → Verify ID with Home Affairs → Generate tax number → Create account
-2. **Login** → Use email + password → Generate JWT token  
-3. **Use APIs** → Include JWT token in Authorization header
+### Registration Flow
+1. **Register** → Choose `/citizen` (JSON only) or `/register-with-documents` (with uploads)
+2. **Verification** → System verifies ID with Home Affairs → Generates tax number → Creates account
+3. **Login Ready** → Account ready for OTP-based login
 
-### Two-Factor Authentication (2FA) Flow
+### Secure Login Flow (OTP-Based Authentication)
 1. **Step 1**: Call `/login/verify-credentials` with email, ID/business number, and password
 2. **Step 2**: System verifies credentials and sends 6-digit OTP to registered phone number
 3. **Step 3**: Call `/login/verify-otp` with the received OTP and `otpKey`
@@ -180,11 +178,11 @@ Complete user registration with password, Home Affairs verification, and Phase 1
 
 ---
 
-### 2. POST `/verify-id` - ID Verification
+### 2. POST `/login/check-email` - Check Email Existence
 
-Verify a South African ID number with Home Affairs database before registration.
+Check if an email address is already registered in the system.
 
-**URL**: `/api/auth/verify-id`  
+**URL**: `/api/auth/login/check-email`  
 **Method**: `POST`  
 **Auth Required**: No  
 **Content-Type**: `application/json`
@@ -193,7 +191,7 @@ Verify a South African ID number with Home Affairs database before registration.
 
 ```json
 {
-  "idNumber": "9105289012088"
+  "email": "john.doe@example.com"
 }
 ```
 
@@ -202,123 +200,39 @@ Verify a South African ID number with Home Affairs database before registration.
 ```json
 {
   "success": true,
-  "message": "ID verification successful",
+  "message": "Email found",
   "data": {
-    "idNumber": "9105289012088",
-    "isValid": true,
-    "isRegistered": false,
-    "homeAffairsData": {
-      "firstName": "John",
-      "lastName": "Doe", 
-      "dateOfBirth": "1991-05-28",
-      "gender": "Male",
-      "citizenship": "South African",
-      "idStatus": "Valid"
-    },
-    "extractedInfo": {
-      "dateOfBirth": "1991-05-28",
-      "gender": "Male",
-      "citizenship": "ZA",
-      "age": 34
-    },
-    "validationDetails": {
-      "checksumValid": true,
-      "dateValid": true,
-      "formatValid": true
-    },
-    "fallbackUsed": false
-  }
-}
-```
-
-#### Error Response (400)
-
-```json
-{
-  "success": false,
-  "message": "ID number not found in Home Affairs database",
-  "data": {
-    "idNumber": "9105289012088",
-    "isValid": false,
-    "validationDetails": {
-      "checksumValid": false,
-      "error": "Invalid ID number checksum"
-    }
-  }
-}
-```
-
----
-
-### 3. POST `/login` - User Login
-
-Authenticate user with email and password.
-
-**URL**: `/api/auth/login`  
-**Method**: `POST`  
-**Auth Required**: No  
-**Content-Type**: `application/json`
-
-#### Request Body
-
-```json
-{
-  "email": "john.doe@example.com",
-  "password": "userPassword123"
-}
-```
-
-#### Success Response (200)
-
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "username": "john.doe91052",
-      "email": "john.doe@example.com",
-      "firstName": "John",
-      "lastName": "Doe",
-      "fullName": "John Doe",
-      "role": "user",
-      "isActive": true,
-      "isVerified": false,
-      "homeAffairsVerified": true,
-      "registrationPhase": "phase_1_complete",
-      "cashNotesEnabled": true,
-      "digitalWalletEnabled": true,
-      "lastLogin": "2025-10-17T12:00:00.000Z"
-    },
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "tokenExpiresIn": "24h",
-    "loginTime": "2025-10-17T12:00:00.000Z"
+    "email": "john.doe@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "accountType": "individual"
   }
 }
 ```
 
 #### Error Responses
 
-**Invalid Credentials (401)**
+**Email Not Found (404)**
 ```json
 {
   "success": false,
-  "message": "Invalid email or password"
+  "message": "No account found with this email address",
+  "code": "EMAIL_NOT_FOUND"
 }
 ```
 
-**Account Inactive (403)**
+**Account Deactivated (403)**
 ```json
 {
   "success": false,
-  "message": "Account is deactivated. Please contact support."
+  "message": "Account is deactivated. Please contact support.",
+  "code": "ACCOUNT_DEACTIVATED"
 }
 ```
 
 ---
 
-### 4. POST `/login/verify-credentials` - Two-Factor Authentication Step 1
+### 3. POST `/login/verify-credentials` - Two-Factor Authentication Step 1
 
 Verify user credentials (email, ID/business number, password) and send OTP to registered phone number.
 
@@ -399,7 +313,7 @@ Verify user credentials (email, ID/business number, password) and send OTP to re
 
 ---
 
-### 5. POST `/login/verify-otp` - Two-Factor Authentication Step 2
+### 4. POST `/login/verify-otp` - Two-Factor Authentication Step 2
 
 Verify the OTP code and complete the login process.
 
@@ -496,7 +410,7 @@ Verify the OTP code and complete the login process.
 
 ---
 
-### 6. POST `/login/resend-otp` - Resend OTP
+### 5. GET `/login/resend-otp` - Resend OTP
 
 Resend OTP to the user's registered phone number if the previous OTP expired or was not received.
 
@@ -548,7 +462,7 @@ Resend OTP to the user's registered phone number if the previous OTP expired or 
 
 ---
 
-### 7. POST `/register-with-documents` - Registration with Document Upload
+### 6. POST `/register-with-documents` - Registration with Document Upload
 
 Complete user registration with password and required documents in a single request.
 
@@ -660,11 +574,11 @@ other_documents: [File] (up to 20 files)
 
 ---
 
-### 8. Document Upload Endpoints (After Registration)
+### 7. Document Upload Endpoints (After Registration)
 
 For users who registered without documents and need to upload them later.
 
-#### 8a. POST `/upload/single` - Upload Single Document
+#### 7a. POST `/upload/single` - Upload Single Document
 
 **URL**: `http://localhost:3000/api/upload/single`  
 **Method**: `POST`  
@@ -679,7 +593,7 @@ category: "id_document" // Optional category
 description: "Front side of ID document" // Optional description
 ```
 
-#### 8b. POST `/upload/multiple` - Upload Multiple Documents
+#### 7b. POST `/upload/multiple` - Upload Multiple Documents
 
 **URL**: `http://localhost:3000/api/upload/multiple`  
 **Method**: `POST`  
@@ -711,53 +625,6 @@ category: "bank_statements" // Optional category
       }
     ],
     "totalUploaded": 1
-  }
-}
-```
-
----
-
-### 9. PUT `/complete-profile` - Profile Completion
-
-Complete user profile with additional information.
-
-**URL**: `/api/auth/complete-profile`  
-**Method**: `PUT`  
-**Auth Required**: Yes  
-**Headers**: `Authorization: Bearer <jwt-token>`
-
-#### Request Body
-
-```json
-{
-  "phoneNumber": "+27821234567",
-  "homeAddress": {
-    "streetAddress": "456 Oak Avenue",
-    "town": "Cape Town",
-    "city": "Cape Town",
-    "province": "Western Cape",
-    "postalCode": "8001"
-  },
-  "emergencyContact": {
-    "name": "Jane Doe",
-    "relationship": "Spouse",
-    "phoneNumber": "+27823456789"
-  }
-}
-```
-
-#### Success Response (200)
-
-```json
-{
-  "success": true,
-  "message": "Profile completed successfully",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "profileComplete": true,
-      "completedAt": "2025-10-17T12:00:00.000Z"
-    }
   }
 }
 ```
@@ -954,30 +821,7 @@ const resendOTP = async (otpKey) => {
   }
 };
 
-// Login
-const loginUser = async (email, password) => {
-  try {
-    const response = await fetch('http://localhost:3000/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      localStorage.setItem('cashDnrToken', result.data.token);
-      return result.data.user;
-    } else {
-      throw new Error(result.message);
-    }
-  } catch (error) {
-    console.error('Login failed:', error);
-    throw error;
-  }
-};
+
 
 // Making authenticated requests
 const makeAuthenticatedRequest = async (url, options = {}) => {
@@ -1061,13 +905,7 @@ curl -X POST http://localhost:3000/api/auth/login/resend-otp \
     "otpKey": "550e8400-e29b-41d4-a716-446655440000_1697539200000"
   }'
 
-# Login User (Basic Authentication)
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "john.doe@example.com",
-    "password": "userPassword123"
-  }'
+
 
 # Access Protected Route
 curl -X GET http://localhost:3000/api/cash-notes/my-notes \
@@ -1155,6 +993,26 @@ For API support or questions:
 
 ---
 
-**Last Updated**: October 17, 2025  
+## 🚨 Current Configuration Status
+
+### **SMS/OTP System**
+- **Current Mode**: Console-based development mode
+- **Provider**: Console output (development testing)
+- **Twilio Setup**: Configured but in development mode
+- **Production Switch**: Change `SMS_PROVIDER=console` to `SMS_PROVIDER=twilio` when ready
+
+### **Database**
+- **Development**: Local PostgreSQL (`localhost:5432`)
+- **Production**: Cloud PostgreSQL configured
+- **Migrations**: Available and ready to deploy
+
+### **Environment**
+- **Current**: `NODE_ENV=development`
+- **Authentication**: JWT tokens with 24h expiration
+- **Security**: bcrypt password hashing with proper salt rounds
+
+---
+
+**Last Updated**: October 22, 2025  
 **API Version**: Phase 1 - Foundational Operations  
-**Environment**: Production Ready
+**Environment**: Development Ready, Production Configured
