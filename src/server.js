@@ -94,45 +94,68 @@ try {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Configure file upload middleware (apply only on upload routes to avoid warnings)
-app.use('/api/upload', fileUpload({
+// Configure file upload middleware with better error handling
+const fileUploadConfig = {
   createParentPath: true,
   parseNested: true,
   useTempFiles: true,
   tempFileDir: path.join(__dirname, '..', 'tmp'),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { 
+    fileSize: 50 * 1024 * 1024, // 50MB limit (increased from 5MB)
+    files: 15, // Maximum 15 files
+    fieldSize: 5 * 1024 * 1024 // 5MB field size limit
+  },
   debug: false,
   safeFileNames: true,
-  preserveExtension: true
-}));
+  preserveExtension: true,
+  abortOnLimit: false, // Don't abort on limit, handle gracefully
+  responseOnLimit: 'File too large (maximum 50MB allowed)',
+  uploadTimeout: 120000, // 2 minute timeout (increased for larger files)
+  // Handle multipart parsing errors
+  parseNested: true
+};
 
-app.use('/api/auth/register-with-documents', fileUpload({
-  createParentPath: true,
-  parseNested: true,
-  useTempFiles: true,
-  tempFileDir: path.join(__dirname, '..', 'tmp'),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  debug: false,
-  safeFileNames: true,
-  preserveExtension: true
-}));
+app.use('/api/upload', fileUpload(fileUploadConfig));
+app.use('/api/auth/register-with-documents', fileUpload(fileUploadConfig));
 
-// Debug middleware for multipart form data
+// Multipart form validation and debugging middleware
 app.use((req, res, next) => {
   if (req.method === 'POST' && req.headers['content-type']?.includes('multipart/form-data')) {
     console.log('📝 Processing multipart form data:', {
+      contentLength: req.headers['content-length'],
+      boundary: req.headers['content-type'].includes('boundary=') ? 'present' : 'missing',
       fields: req.body,
       files: req.files ? Object.keys(req.files) : []
     });
+
+    // Validate that the multipart request has proper boundary
+    const contentType = req.headers['content-type'];
+    if (!contentType.includes('boundary=')) {
+      return res.status(400).json({
+        error: 'Invalid multipart format',
+        message: 'Multipart form data is missing boundary parameter',
+        code: 'MISSING_BOUNDARY'
+      });
+    }
+
+    // Check content length
+    const contentLength = parseInt(req.headers['content-length'] || '0');
+    if (contentLength === 0) {
+      return res.status(400).json({
+        error: 'Empty upload',
+        message: 'No data received in the upload request',
+        code: 'EMPTY_UPLOAD'
+      });
+    }
   }
   next();
 });
 
 // Basic middleware setup - after file upload middleware
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increased from 10mb
 app.use(express.urlencoded({
   extended: true,
-  limit: '10mb'
+  limit: '50mb' // Increased from 10mb
 }));
 
 // Other middleware
@@ -243,7 +266,7 @@ app.use((err, req, res, _next) => {
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({
       error: 'File too large',
-      message: 'The uploaded file exceeds the size limit (5MB)'
+      message: 'The uploaded file exceeds the size limit (50MB)'
     });
   }
 
@@ -261,16 +284,38 @@ app.use((err, req, res, _next) => {
     });
   }
 
+  // Handle multipart parsing errors specifically
+  if (err.message && err.message.includes('Unexpected end of form')) {
+    return res.status(400).json({
+      error: 'Upload interrupted',
+      message: 'File upload was interrupted or incomplete. Please try again.',
+      code: 'UPLOAD_INTERRUPTED',
+      suggestion: 'Check your internet connection and try uploading again'
+    });
+  }
+
+  // Handle busboy/multipart errors
+  if (err.message && (err.message.includes('Multipart') || err.message.includes('busboy'))) {
+    return res.status(400).json({
+      error: 'Invalid file upload format',
+      message: 'The file upload format is invalid or corrupted',
+      code: 'INVALID_MULTIPART',
+      suggestion: 'Ensure you are uploading valid files with correct form data'
+    });
+  }
+
   // For multipart/form-data errors, provide more context
   if (req.headers['content-type']?.includes('multipart/form-data')) {
     return res.status(400).json({
       error: 'File upload error',
       message: err.message,
-      debug: {
+      code: err.code || 'UPLOAD_ERROR',
+      debug: process.env.NODE_ENV === 'development' ? {
         contentType: req.headers['content-type'],
         filesPresent: !!req.files,
-        bodyFields: Object.keys(req.body)
-      }
+        bodyFields: Object.keys(req.body || {}),
+        errorStack: err.stack
+      } : undefined
     });
   }
 
