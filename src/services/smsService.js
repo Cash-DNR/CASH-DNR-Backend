@@ -14,18 +14,18 @@ class SMSService {
 
   initializeProvider() {
     switch (this.provider.toLowerCase()) {
-      case 'twilio':
-        this.initTwilio();
-        break;
-      case 'aws':
-        this.initAWS();
-        break;
-      case 'vonage':
-        this.initVonage();
-        break;
-      default:
-        logger.warn(`Unknown SMS provider: ${this.provider}. Falling back to mock mode.`);
-        this.provider = 'mock';
+    case 'twilio':
+      this.initTwilio();
+      break;
+    case 'aws':
+      this.initAWS();
+      break;
+    case 'vonage':
+      this.initVonage();
+      break;
+    default:
+      logger.warn(`Unknown SMS provider: ${this.provider}. Falling back to mock mode.`);
+      this.provider = 'mock';
     }
   }
 
@@ -56,7 +56,7 @@ class SMSService {
   }
 
   initVonage() {
-    // Placeholder for Vonage implementation  
+    // Placeholder for Vonage implementation
     logger.info('🚧 Vonage SMS service not implemented yet. Using mock mode.');
     this.provider = 'mock';
   }
@@ -68,8 +68,8 @@ class SMSService {
    */
   formatPhoneNumber(phoneNumber) {
     // Remove all non-digits
-    let cleaned = phoneNumber.replace(/\D/g, '');
-    
+    const cleaned = phoneNumber.replace(/\D/g, '');
+
     // Handle South African numbers
     if (cleaned.startsWith('27')) {
       // Already in international format
@@ -81,7 +81,7 @@ class SMSService {
       // Missing country code and leading zero
       return `+27${cleaned}`;
     }
-    
+
     // Default: assume it needs +27 prefix
     return `+27${cleaned}`;
   }
@@ -98,25 +98,25 @@ class SMSService {
 
     try {
       switch (this.provider) {
-        case 'twilio':
-          return await this.sendViaTwilio(formattedNumber, message, otp);
-        case 'aws':
-          return await this.sendViaAWS(formattedNumber, message, otp);
-        case 'vonage':
-          return await this.sendViaVonage(formattedNumber, message, otp);
-        case 'mock':
-        default:
-          return await this.sendViaMock(formattedNumber, message, otp);
+      case 'twilio':
+        return await this.sendViaTwilio(formattedNumber, message, otp);
+      case 'aws':
+        return await this.sendViaAWS(formattedNumber, message, otp);
+      case 'vonage':
+        return await this.sendViaVonage(formattedNumber, message, otp);
+      case 'mock':
+      default:
+        return await this.sendViaMock(formattedNumber, message, otp);
       }
     } catch (error) {
       logger.error(`❌ SMS send failed via ${this.provider}:`, error.message);
-      
+
       // Fallback to mock mode for development
       if (this.provider !== 'mock') {
         logger.info('🔄 Falling back to mock SMS mode');
         return await this.sendViaMock(formattedNumber, message, otp);
       }
-      
+
       throw error;
     }
   }
@@ -133,7 +133,7 @@ class SMSService {
       });
 
       logger.info(`✅ SMS sent via Twilio to ${phoneNumber.replace(/\d(?=\d{4})/g, '*')}`);
-      
+
       return {
         success: true,
         provider: 'twilio',
@@ -170,10 +170,10 @@ class SMSService {
   async sendViaMock(phoneNumber, message, otp) {
     logger.info(`📱 [MOCK SMS] Sending OTP ${otp} to ${phoneNumber}`);
     logger.info(`📱 [MOCK SMS] Message: ${message}`);
-    
+
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     return {
       success: true,
       provider: 'mock',
@@ -190,20 +190,20 @@ class SMSService {
    */
   validateConfiguration() {
     switch (this.provider) {
-      case 'twilio':
-        return !!(process.env.TWILIO_ACCOUNT_SID && 
-                 process.env.TWILIO_AUTH_TOKEN && 
+    case 'twilio':
+      return !!(process.env.TWILIO_ACCOUNT_SID &&
+                 process.env.TWILIO_AUTH_TOKEN &&
                  process.env.TWILIO_PHONE_NUMBER);
-      case 'aws':
-        return !!(process.env.AWS_ACCESS_KEY_ID && 
-                 process.env.AWS_SECRET_ACCESS_KEY && 
+    case 'aws':
+      return !!(process.env.AWS_ACCESS_KEY_ID &&
+                 process.env.AWS_SECRET_ACCESS_KEY &&
                  process.env.AWS_REGION);
-      case 'vonage':
-        return !!(process.env.VONAGE_API_KEY && 
+    case 'vonage':
+      return !!(process.env.VONAGE_API_KEY &&
                  process.env.VONAGE_API_SECRET);
-      case 'mock':
-      default:
-        return true; // Mock mode always works
+    case 'mock':
+    default:
+      return true; // Mock mode always works
     }
   }
 

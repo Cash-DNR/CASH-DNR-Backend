@@ -4,8 +4,7 @@ import User from '../models/User.js';
 import Notification from '../models/Notification.js';
 import UserActivity from '../models/UserActivity.js';
 import CashNote from '../models/CashNote.js';
-import Transaction from '../models/Transaction.js';
-import { Op } from 'sequelize';
+// Transaction and Op imports removed as they're unused in this service
 
 // Store active connections
 const activeUsers = new Map();
@@ -49,7 +48,7 @@ class RealtimeNotificationService {
     try {
       // Get all active users
       const activeUserIds = Array.from(activeUsers.keys());
-      
+
       // Send to all connected users
       for (const userId of activeUserIds) {
         await this.sendNotification(userId, {
@@ -124,7 +123,7 @@ class RealtimeNotificationService {
       // Send notification for transfers
       if (cashNoteData.action === 'transferred' || cashNoteData.action === 'received') {
         const title = cashNoteData.action === 'transferred' ? 'Cash Note Sent' : 'Cash Note Received';
-        const message = cashNoteData.action === 'transferred' 
+        const message = cashNoteData.action === 'transferred'
           ? `You sent a R${cashNoteData.denomination} cash note to ${cashNoteData.toUser?.fullName || 'another user'}`
           : `You received a R${cashNoteData.denomination} cash note from ${cashNoteData.fromUser?.fullName || 'another user'}`;
 
@@ -171,10 +170,10 @@ class RealtimeNotificationService {
 }
 
 // Socket authentication middleware
-const authenticateSocket = async (socket, next) => {
+const authenticateSocket = async(socket, next) => {
   try {
     const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.replace('Bearer ', '');
-    
+
     if (!token) {
       logger.warn('Socket connection attempted without token');
       return next(new Error('Authentication error: No token provided'));
@@ -182,7 +181,7 @@ const authenticateSocket = async (socket, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findByPk(decoded.userId);
-    
+
     if (!user) {
       logger.warn(`Socket authentication failed: User ${decoded.userId} not found`);
       return next(new Error('Authentication error: User not found'));
@@ -190,10 +189,10 @@ const authenticateSocket = async (socket, next) => {
 
     socket.userId = user.id;
     socket.user = user;
-    
+
     logger.info(`Socket authenticated for user ${user.email} (${user.id})`);
     next();
-    
+
   } catch (error) {
     logger.error('Socket authentication error:', error);
     next(new Error('Authentication error: Invalid token'));
@@ -205,10 +204,10 @@ export const initializeSocketHandlers = (io) => {
   // Authentication middleware
   io.use(authenticateSocket);
 
-  io.on('connection', async (socket) => {
+  io.on('connection', async(socket) => {
     const userId = socket.userId;
     const user = socket.user;
-    
+
     logger.info(`🔌 User connected: ${user.email} (${userId})`);
 
     // Store user connection
@@ -225,7 +224,7 @@ export const initializeSocketHandlers = (io) => {
       connectedAt: new Date(),
       lastActivity: new Date()
     });
-    
+
     userSockets.set(userId, socket);
 
     // Join user-specific room for personal notifications
@@ -291,7 +290,7 @@ export const initializeSocketHandlers = (io) => {
     }
 
     // Notification event handlers
-    socket.on('mark_notification_read', async (data) => {
+    socket.on('mark_notification_read', async(data) => {
       try {
         await handleMarkNotificationRead(socket, data);
       } catch (error) {
@@ -300,7 +299,7 @@ export const initializeSocketHandlers = (io) => {
       }
     });
 
-    socket.on('mark_all_notifications_read', async () => {
+    socket.on('mark_all_notifications_read', async() => {
       try {
         await handleMarkAllNotificationsRead(socket);
       } catch (error) {
@@ -309,7 +308,7 @@ export const initializeSocketHandlers = (io) => {
       }
     });
 
-    socket.on('get_notification_history', async (data) => {
+    socket.on('get_notification_history', async(data) => {
       try {
         await handleGetNotificationHistory(socket, data);
       } catch (error) {
@@ -318,7 +317,7 @@ export const initializeSocketHandlers = (io) => {
       }
     });
 
-    socket.on('get_activity_feed', async (data) => {
+    socket.on('get_activity_feed', async(data) => {
       try {
         await handleGetActivityFeed(socket, data);
       } catch (error) {
@@ -327,7 +326,7 @@ export const initializeSocketHandlers = (io) => {
       }
     });
 
-    socket.on('request_balance_update', async () => {
+    socket.on('request_balance_update', async() => {
       try {
         await handleRequestBalanceUpdate(socket);
       } catch (error) {
@@ -344,7 +343,7 @@ export const initializeSocketHandlers = (io) => {
     });
 
     // Handle disconnection
-    socket.on('disconnect', async (reason) => {
+    socket.on('disconnect', async(reason) => {
       logger.info(`🔌 User disconnected: ${user.email} (${userId}). Reason: ${reason}`);
 
       try {
@@ -372,7 +371,7 @@ export const initializeSocketHandlers = (io) => {
 };
 
 // Event handler functions
-const handleMarkNotificationRead = async (socket, data) => {
+const handleMarkNotificationRead = async(socket, data) => {
   const { notificationId } = data;
   const userId = socket.userId;
 
@@ -413,7 +412,7 @@ const handleMarkNotificationRead = async (socket, data) => {
   }
 };
 
-const handleMarkAllNotificationsRead = async (socket) => {
+const handleMarkAllNotificationsRead = async(socket) => {
   const userId = socket.userId;
 
   try {
@@ -442,7 +441,7 @@ const handleMarkAllNotificationsRead = async (socket) => {
   }
 };
 
-const handleGetNotificationHistory = async (socket, data) => {
+const handleGetNotificationHistory = async(socket, data) => {
   const userId = socket.userId;
   const { page = 1, limit = 20, type = null } = data;
 
@@ -478,7 +477,7 @@ const handleGetNotificationHistory = async (socket, data) => {
   }
 };
 
-const handleGetActivityFeed = async (socket, data) => {
+const handleGetActivityFeed = async(socket, data) => {
   const userId = socket.userId;
   const { page = 1, limit = 20, type = null } = data;
 
@@ -514,7 +513,7 @@ const handleGetActivityFeed = async (socket, data) => {
   }
 };
 
-const handleRequestBalanceUpdate = async (socket) => {
+const handleRequestBalanceUpdate = async(socket) => {
   const userId = socket.userId;
 
   try {

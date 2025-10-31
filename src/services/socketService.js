@@ -1,5 +1,5 @@
 // Re-export the new realtime service for backward compatibility
-export { 
+export {
   initializeSocketHandlers,
   sendNotificationToUser,
   sendBalanceUpdate,

@@ -14,7 +14,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const userId = req.params.userId;
     const uploadDir = path.join(process.cwd(), 'uploads', userId);
-    
+
     // Create user-specific directory if it doesn't exist
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
@@ -80,15 +80,15 @@ router.put('/:userId/contact-details', [
   body('homeAddress.province')
     .notEmpty()
     .withMessage('Province is required')
-    .isIn(['Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo', 
-           'Mpumalanga', 'North West', 'Northern Cape', 'Western Cape'])
+    .isIn(['Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo',
+      'Mpumalanga', 'North West', 'Northern Cape', 'Western Cape'])
     .withMessage('Invalid province'),
   body('homeAddress.postalCode')
     .notEmpty()
     .withMessage('Postal code is required')
     .matches(/^\d{4}$/)
     .withMessage('Valid South African postal code required (4 digits)')
-], async (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -142,7 +142,7 @@ router.put('/:userId/contact-details', [
  * @desc    Upload user documents
  * @access  Private
  */
-router.post('/:userId/documents', upload.fields(requiredDocuments), async (req, res) => {
+router.post('/:userId/documents', upload.fields(requiredDocuments), async(req, res) => {
   try {
     const { userId } = req.params;
     const files = req.files;

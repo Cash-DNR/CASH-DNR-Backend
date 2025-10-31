@@ -12,7 +12,7 @@ const isProduction = environment === 'production';
 // Function to get database configuration based on environment
 const getDatabaseConfig = () => {
   const environment = (process.env.NODE_ENV || 'development').trim().toLowerCase();
-  
+
   if (environment === 'development') {
     return {
       dialect: 'postgres',
@@ -74,12 +74,12 @@ const getDatabaseConfig = () => {
 export const sequelize = new Sequelize(getDatabaseConfig());
 
 // Test the connection
-const testConnection = async () => {
+const testConnection = async() => {
   try {
     await sequelize.authenticate();
     const env = process.env.NODE_ENV || 'development';
     const dbName = isDevelopment ? process.env.DEV_DB_NAME : process.env.PROD_DB_NAME;
-    console.log(`✅ Database connection established successfully.`);
+    console.log('✅ Database connection established successfully.');
     console.log(`📊 Environment: ${env.toUpperCase()}`);
     console.log(`🗄️  Database: ${dbName}`);
   } catch (error) {

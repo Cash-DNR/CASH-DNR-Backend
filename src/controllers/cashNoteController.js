@@ -76,7 +76,7 @@ class CashNoteController {
       };
 
       const noteType = isForeign ? CashNote.NOTE_TYPES.FOREIGN : noteTypeMap[denomination];
-      
+
       if (!noteType && !isForeign) {
         return res.status(400).json({
           success: false,
@@ -322,7 +322,7 @@ class CashNoteController {
       if (cashNote.is_foreign) {
         // For Phase 1, foreign transfers require Home Affairs validation
         const homeAffairsValidation = await this.validateForeignTransfer(cashNote, fromUserId, recipientUser.id);
-        
+
         if (!homeAffairsValidation.success) {
           return res.status(403).json({
             success: false,
@@ -413,11 +413,11 @@ class CashNoteController {
       const { page = 1, limit = 50, status, noteType } = req.query;
 
       const whereClause = { current_owner_id: userId };
-      
+
       if (status) {
         whereClause.status = status;
       }
-      
+
       if (noteType) {
         whereClause.note_type = noteType;
       }
@@ -621,7 +621,7 @@ class CashNoteController {
     try {
       // Import Home Affairs service
       const { homeAffairsService } = await import('../services/homeAffairsService.js');
-      
+
       // Get user details for validation
       const [fromUser, toUser] = await Promise.all([
         User.findByPk(fromUserId),

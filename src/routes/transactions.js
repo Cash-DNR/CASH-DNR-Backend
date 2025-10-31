@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, query, validationResult } from 'express-validator';
-import { Transaction, User, TransactionLog } from '../models/index.js';
+import { Transaction, TransactionLog } from '../models/index.js';
 import logger from '../services/logger.js';
 import TaxTaggingService from '../services/taxTaggingService.js';
 import TransactionLoggingService from '../services/transactionLoggingService.js';
@@ -41,7 +41,7 @@ router.post('/', [
   body('receiverInfo.taxId')
     .notEmpty()
     .withMessage('Receiver tax ID is required')
-], async (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -169,7 +169,7 @@ router.get('/user/:userId', [
   query('toDate')
     .optional()
     .isISO8601()
-], async (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -181,8 +181,8 @@ router.get('/user/:userId', [
     }
 
     const { userId } = req.params;
-    const { 
-      limit = 50, 
+    const {
+      limit = 50,
       offset = 0,
       taxClassification,
       fromDate,
@@ -232,7 +232,7 @@ router.get('/user/:userId', [
  * @desc    Get logs for a specific transaction
  * @access  Private
  */
-router.get('/:transactionId/logs', async (req, res) => {
+router.get('/:transactionId/logs', async(req, res) => {
   try {
     const { transactionId } = req.params;
     const { page = 1, limit = 50, logType } = req.query;
@@ -273,7 +273,7 @@ router.put('/:transactionId/tax-classification', [
   body('adminUserId')
     .isUUID()
     .withMessage('Valid admin user ID is required')
-], async (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -296,7 +296,7 @@ router.put('/:transactionId/tax-classification', [
     }
 
     const oldClassification = transaction.tax_classification;
-    
+
     // Update transaction
     await transaction.update({ tax_classification: taxClassification });
 
@@ -344,7 +344,7 @@ router.put('/:transactionId/tax-classification', [
  * @desc    Re-run tax classification for a transaction
  * @access  Private
  */
-router.post('/:transactionId/reclassify', async (req, res) => {
+router.post('/:transactionId/reclassify', async(req, res) => {
   try {
     const { transactionId } = req.params;
 
@@ -366,7 +366,7 @@ router.post('/:transactionId/reclassify', async (req, res) => {
     });
 
     const oldClassification = transaction.tax_classification;
-    
+
     // Update if classification changed
     if (taxClassification.tax_classification !== oldClassification) {
       await transaction.update({ tax_classification: taxClassification.tax_classification });
@@ -419,7 +419,7 @@ router.get('/tax-summary/:userId', [
   query('toDate')
     .isISO8601()
     .withMessage('Valid to date is required')
-], async (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -461,7 +461,7 @@ router.get('/audit-trail', [
   query('toDate').optional().isISO8601(),
   query('page').optional().isInt({ min: 1 }),
   query('limit').optional().isInt({ min: 1, max: 200 })
-], async (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -518,7 +518,7 @@ router.put('/:transactionId/flag', [
   body('adminUserId')
     .isUUID()
     .withMessage('Valid admin user ID is required')
-], async (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

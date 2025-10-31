@@ -1,24 +1,25 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
 import Notification from '../models/Notification.js';
-import UserActivity from '../models/UserActivity.js';
-import { sendNotificationToUser, sendActivityUpdate } from '../services/realtimeService.js';
+import { sendNotificationToUser } from '../services/realtimeService.js';
+import { Op } from 'sequelize';
+import { sequelize } from '../config/database.js';
 import logger from '../services/logger.js';
 
 const router = express.Router();
 
 // Get all notifications for a user
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { status, type, page = 1, limit = 50 } = req.query;
 
     const where = { userId };
-    
+
     if (status) {
       where.status = status;
     }
-    
+
     if (type) {
       where.type = type;
     }
@@ -71,7 +72,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get unread notification count
-router.get('/unread-count', authenticateToken, async (req, res) => {
+router.get('/unread-count', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -103,7 +104,7 @@ router.get('/unread-count', authenticateToken, async (req, res) => {
 });
 
 // Mark notification as read
-router.put('/:notificationId/read', authenticateToken, async (req, res) => {
+router.put('/:notificationId/read', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { notificationId } = req.params;
@@ -143,7 +144,7 @@ router.put('/:notificationId/read', authenticateToken, async (req, res) => {
 });
 
 // Mark all notifications as read
-router.put('/mark-all-read', authenticateToken, async (req, res) => {
+router.put('/mark-all-read', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -175,7 +176,7 @@ router.put('/mark-all-read', authenticateToken, async (req, res) => {
 });
 
 // Archive notification
-router.put('/:notificationId/archive', authenticateToken, async (req, res) => {
+router.put('/:notificationId/archive', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { notificationId } = req.params;
@@ -214,7 +215,7 @@ router.put('/:notificationId/archive', authenticateToken, async (req, res) => {
 });
 
 // Delete notification
-router.delete('/:notificationId', authenticateToken, async (req, res) => {
+router.delete('/:notificationId', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { notificationId } = req.params;
@@ -248,7 +249,7 @@ router.delete('/:notificationId', authenticateToken, async (req, res) => {
 });
 
 // Send notification to user (admin only)
-router.post('/send', authenticateToken, async (req, res) => {
+router.post('/send', authenticateToken, async(req, res) => {
   try {
     // Check if user has admin permissions
     const userRole = req.user.role || 'user';
@@ -307,7 +308,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 });
 
 // Broadcast notification to all users (admin only)
-router.post('/broadcast', authenticateToken, async (req, res) => {
+router.post('/broadcast', authenticateToken, async(req, res) => {
   try {
     // Check if user has admin permissions
     const userRole = req.user.role || 'user';
@@ -386,7 +387,7 @@ router.post('/broadcast', authenticateToken, async (req, res) => {
 });
 
 // Get notification statistics (admin only)
-router.get('/stats', authenticateToken, async (req, res) => {
+router.get('/stats', authenticateToken, async(req, res) => {
   try {
     // Check if user has admin permissions
     const userRole = req.user.role || 'user';
@@ -400,10 +401,10 @@ router.get('/stats', authenticateToken, async (req, res) => {
     const stats = await Promise.all([
       // Total notifications
       Notification.count(),
-      
+
       // Unread notifications
       Notification.count({ where: { status: Notification.STATUS.UNREAD } }),
-      
+
       // Notifications by type
       Notification.findAll({
         attributes: [
@@ -413,7 +414,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
         group: ['type'],
         raw: true
       }),
-      
+
       // Notifications by priority
       Notification.findAll({
         attributes: [

@@ -6,7 +6,7 @@
 import { sequelize } from '../config/database.js';
 import logger from '../services/logger.js';
 
-export const up = async () => {
+export const up = async() => {
   const queryInterface = sequelize.getQueryInterface();
   const transaction = await sequelize.transaction();
 
@@ -15,7 +15,7 @@ export const up = async () => {
 
     // Add indexes for better real-time performance
     logger.info('📊 Adding performance indexes...');
-    
+
     // Notifications indexes for real-time queries
     try {
       await queryInterface.addIndex('notifications', ['user_id', 'status'], {
@@ -138,7 +138,7 @@ export const up = async () => {
   }
 };
 
-export const down = async () => {
+export const down = async() => {
   const queryInterface = sequelize.getQueryInterface();
   const transaction = await sequelize.transaction();
 

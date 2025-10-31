@@ -4,13 +4,14 @@ import ChatRoom from '../models/ChatRoom.js';
 import ChatMessage from '../models/ChatMessage.js';
 import ChatRoomMember from '../models/ChatRoomMember.js';
 import User from '../models/User.js';
+import { Op } from 'sequelize';
 import logger from '../services/logger.js';
 import { broadcastToRoom } from '../services/socketService.js';
 
 const router = express.Router();
 
 // Get all chat rooms for a user
-router.get('/rooms', authenticateToken, async (req, res) => {
+router.get('/rooms', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -60,7 +61,7 @@ router.get('/rooms', authenticateToken, async (req, res) => {
 });
 
 // Create a new chat room
-router.post('/rooms', authenticateToken, async (req, res) => {
+router.post('/rooms', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { name, type, description, isPrivate, memberIds } = req.body;
@@ -136,7 +137,7 @@ router.post('/rooms', authenticateToken, async (req, res) => {
 });
 
 // Get messages for a chat room
-router.get('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
+router.get('/rooms/:roomId/messages', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { roomId } = req.params;
@@ -209,7 +210,7 @@ router.get('/rooms/:roomId/messages', authenticateToken, async (req, res) => {
 });
 
 // Add member to chat room
-router.post('/rooms/:roomId/members', authenticateToken, async (req, res) => {
+router.post('/rooms/:roomId/members', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { roomId } = req.params;
@@ -240,7 +241,7 @@ router.post('/rooms/:roomId/members', authenticateToken, async (req, res) => {
     }
 
     // Add members
-    const memberPromises = userIds.map(async (memberId) => {
+    const memberPromises = userIds.map(async(memberId) => {
       // Check if user is already a member
       const existingMember = await ChatRoomMember.findOne({
         where: { userId: memberId, roomId }
@@ -294,7 +295,7 @@ router.post('/rooms/:roomId/members', authenticateToken, async (req, res) => {
 });
 
 // Get room members
-router.get('/rooms/:roomId/members', authenticateToken, async (req, res) => {
+router.get('/rooms/:roomId/members', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { roomId } = req.params;
@@ -345,7 +346,7 @@ router.get('/rooms/:roomId/members', authenticateToken, async (req, res) => {
 });
 
 // Update message (edit)
-router.put('/messages/:messageId', authenticateToken, async (req, res) => {
+router.put('/messages/:messageId', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { messageId } = req.params;
@@ -413,14 +414,14 @@ router.put('/messages/:messageId', authenticateToken, async (req, res) => {
 });
 
 // Delete message
-router.delete('/messages/:messageId', authenticateToken, async (req, res) => {
+router.delete('/messages/:messageId', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { messageId } = req.params;
 
     // Find message and verify ownership or admin permissions
     const message = await ChatMessage.findByPk(messageId);
-    
+
     if (!message) {
       return res.status(404).json({
         success: false,
@@ -430,7 +431,7 @@ router.delete('/messages/:messageId', authenticateToken, async (req, res) => {
 
     // Check if user owns the message or is room admin
     let canDelete = message.senderId === userId;
-    
+
     if (!canDelete) {
       const membership = await ChatRoomMember.findOne({
         where: {
@@ -477,7 +478,7 @@ router.delete('/messages/:messageId', authenticateToken, async (req, res) => {
 });
 
 // Search messages in a room
-router.get('/rooms/:roomId/search', authenticateToken, async (req, res) => {
+router.get('/rooms/:roomId/search', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { roomId } = req.params;

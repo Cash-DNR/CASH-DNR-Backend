@@ -33,11 +33,41 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
+
+// Consolidated CORS configuration for both HTTP and Socket.IO
+const defaultAllowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+  'https://cash-dnr-backend.onrender.com'
+];
+
+// Allow configuring additional origins via env (comma-separated)
+const envOrigins = (process.env.CORS_ORIGINS || process.env.CLIENT_URL || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envOrigins]));
+
+const corsOptions = {
+  origin: function(origin, callback) {
+    // Allow non-browser requests (like Postman) where origin is undefined
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
 const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Authorization"],
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true
   },
   transports: ['websocket', 'polling']
@@ -60,53 +90,55 @@ try {
   logger.info('Created required directories');
 }
 
-// Configure file upload middleware first (before other middleware)
-// Only apply to upload routes to avoid warning on non-file requests
+// Apply CORS early so preflight (OPTIONS) requests are handled before other middleware
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
+// Configure file upload middleware (apply only on upload routes to avoid warnings)
 app.use('/api/upload', fileUpload({
-    createParentPath: true,
-    parseNested: true,
-    useTempFiles: true,
-    tempFileDir: path.join(__dirname, '..', 'tmp'),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    debug: false,
-    safeFileNames: true,
-    preserveExtension: true
+  createParentPath: true,
+  parseNested: true,
+  useTempFiles: true,
+  tempFileDir: path.join(__dirname, '..', 'tmp'),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  debug: false,
+  safeFileNames: true,
+  preserveExtension: true
 }));
 
 app.use('/api/auth/register-with-documents', fileUpload({
-    createParentPath: true,
-    parseNested: true,
-    useTempFiles: true,
-    tempFileDir: path.join(__dirname, '..', 'tmp'),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    debug: false,
-    safeFileNames: true,
-    preserveExtension: true
+  createParentPath: true,
+  parseNested: true,
+  useTempFiles: true,
+  tempFileDir: path.join(__dirname, '..', 'tmp'),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  debug: false,
+  safeFileNames: true,
+  preserveExtension: true
 }));
 
 // Debug middleware for multipart form data
 app.use((req, res, next) => {
-    if (req.method === 'POST' && req.headers['content-type']?.includes('multipart/form-data')) {
-        console.log('📝 Processing multipart form data:', {
-            fields: req.body,
-            files: req.files ? Object.keys(req.files) : []
-        });
-    }
-    next();
+  if (req.method === 'POST' && req.headers['content-type']?.includes('multipart/form-data')) {
+    console.log('📝 Processing multipart form data:', {
+      fields: req.body,
+      files: req.files ? Object.keys(req.files) : []
+    });
+  }
+  next();
 });
 
 // Basic middleware setup - after file upload middleware
 app.use(express.json());
-app.use(express.urlencoded({ 
-    extended: true,
-    limit: '10mb'
+app.use(express.urlencoded({
+  extended: true,
+  limit: '10mb'
 }));
 
 // Other middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
-app.use(cors());
 app.use(morgan('dev'));
 
 // Debug middleware for requests
@@ -184,7 +216,7 @@ app.use('/api/realtime', realtimeRoutes);
 // Handle WebSocket endpoint requests (placeholder)
 app.get('/ws', (req, res) => {
   console.log('📡 WebSocket endpoint accessed - returning info message');
-  res.status(200).json({ 
+  res.status(200).json({
     success: false,
     message: 'WebSocket endpoint not implemented',
     info: 'This endpoint is for WebSocket connections which are not currently supported',
@@ -204,9 +236,9 @@ app.use((req, res) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('❌ Error:', err);
-  
+
   // File upload errors
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({
@@ -214,7 +246,7 @@ app.use((err, req, res, next) => {
       message: 'The uploaded file exceeds the size limit (5MB)'
     });
   }
-  
+
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     return res.status(400).json({
       error: 'Unexpected file',

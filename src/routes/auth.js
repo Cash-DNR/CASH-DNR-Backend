@@ -78,101 +78,101 @@ const router = express.Router();
 
 // File upload validation middleware
 function validateFileUpload(req, res, next) {
-    try {
-        console.log('\n🔍 Detailed Request Debug:');
-        console.log('1. Request Method:', req.method);
-        console.log('2. Request URL:', req.url);
-        console.log('3. Content-Type:', req.headers['content-type']);
-        console.log('4. Request Body:', req.body);
-        console.log('5. Request Files:', req.files);
+  try {
+    console.log('\n🔍 Detailed Request Debug:');
+    console.log('1. Request Method:', req.method);
+    console.log('2. Request URL:', req.url);
+    console.log('3. Content-Type:', req.headers['content-type']);
+    console.log('4. Request Body:', req.body);
+    console.log('5. Request Files:', req.files);
         
-        // Check content type
-        if (!req.headers['content-type']?.includes('multipart/form-data')) {
-            return res.status(400).json({
-                error: 'Invalid content type',
-                expected: 'multipart/form-data',
-                received: req.headers['content-type']
-            });
-        }
-
-        // Check file upload middleware
-        if (!req.files) {
-            return res.status(500).json({
-                error: 'File upload middleware not properly initialized',
-                debug: {
-                    contentType: req.headers['content-type'],
-                    bodyKeys: Object.keys(req.body)
-                }
-            });
-        }
-
-        // Check if any files were actually uploaded
-        if (Object.keys(req.files).length === 0) {
-            return res.status(400).json({
-                error: 'No files were uploaded',
-                debug: {
-                    contentType: req.headers['content-type'],
-                    bodyKeys: Object.keys(req.body),
-                    files: req.files
-                }
-            });
-        }
-
-        // Check required files
-        const { idDocument, proofOfResidence } = req.files || {};
-        if (!idDocument || !proofOfResidence) {
-            return res.status(400).json({
-                error: 'Missing required files',
-                debug: {
-                    idDocument: !!idDocument,
-                    proofOfResidence: !!proofOfResidence
-                }
-            });
-        }
-
-        // Validate file types and sizes
-        const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-        const maxSize = 5 * 1024 * 1024; // 5MB
-
-        if (!allowedTypes.includes(idDocument.mimetype)) {
-            return res.status(400).json({
-                error: 'Invalid ID document format',
-                allowedTypes
-            });
-        }
-
-        if (!allowedTypes.includes(proofOfResidence.mimetype)) {
-            return res.status(400).json({
-                error: 'Invalid proof of residence format',
-                allowedTypes
-            });
-        }
-
-        if (idDocument.size > maxSize || proofOfResidence.size > maxSize) {
-            return res.status(400).json({
-                error: 'File size too large',
-                maxSize: '5MB'
-            });
-        }
-
-        console.log('📁 Files validated successfully');
-        next();
-    } catch (error) {
-        console.error('Error in file validation:', error);
-        return res.status(500).json({
-            error: 'Error validating files',
-            message: error.message
-        });
+    // Check content type
+    if (!req.headers['content-type']?.includes('multipart/form-data')) {
+      return res.status(400).json({
+        error: 'Invalid content type',
+        expected: 'multipart/form-data',
+        received: req.headers['content-type']
+      });
     }
+
+    // Check file upload middleware
+    if (!req.files) {
+      return res.status(500).json({
+        error: 'File upload middleware not properly initialized',
+        debug: {
+          contentType: req.headers['content-type'],
+          bodyKeys: Object.keys(req.body)
+        }
+      });
+    }
+
+    // Check if any files were actually uploaded
+    if (Object.keys(req.files).length === 0) {
+      return res.status(400).json({
+        error: 'No files were uploaded',
+        debug: {
+          contentType: req.headers['content-type'],
+          bodyKeys: Object.keys(req.body),
+          files: req.files
+        }
+      });
+    }
+
+    // Check required files
+    const { idDocument, proofOfResidence } = req.files || {};
+    if (!idDocument || !proofOfResidence) {
+      return res.status(400).json({
+        error: 'Missing required files',
+        debug: {
+          idDocument: !!idDocument,
+          proofOfResidence: !!proofOfResidence
+        }
+      });
+    }
+
+    // Validate file types and sizes
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    if (!allowedTypes.includes(idDocument.mimetype)) {
+      return res.status(400).json({
+        error: 'Invalid ID document format',
+        allowedTypes
+      });
+    }
+
+    if (!allowedTypes.includes(proofOfResidence.mimetype)) {
+      return res.status(400).json({
+        error: 'Invalid proof of residence format',
+        allowedTypes
+      });
+    }
+
+    if (idDocument.size > maxSize || proofOfResidence.size > maxSize) {
+      return res.status(400).json({
+        error: 'File size too large',
+        maxSize: '5MB'
+      });
+    }
+
+    console.log('📁 Files validated successfully');
+    next();
+  } catch (error) {
+    console.error('Error in file validation:', error);
+    return res.status(500).json({
+      error: 'Error validating files',
+      message: error.message
+    });
+  }
 }
 
 // Validation chain for ID number
 const validateIdNumber = [
-    body('idNumber')
-        .isLength({ min: 13, max: 13 })
-        .withMessage('South African ID number must be exactly 13 digits')
-        .isNumeric()
-        .withMessage('ID number must contain only numbers')
+  body('idNumber')
+    .isLength({ min: 13, max: 13 })
+    .withMessage('South African ID number must be exactly 13 digits')
+    .isNumeric()
+    .withMessage('ID number must contain only numbers')
 ];
 
 /**
@@ -181,212 +181,212 @@ const validateIdNumber = [
  * @access  Public
  */
 router.post('/citizen', async (req, res) => {
-    try {
-        console.log('\n🔍 Request received:', {
-            method: req.method,
-            contentType: req.headers['content-type'],
-            body: req.body
-        });
+  try {
+    console.log('\n🔍 Request received:', {
+      method: req.method,
+      contentType: req.headers['content-type'],
+      body: req.body
+    });
 
-        // Validate request content type
-        if (req.headers['content-type'] !== 'application/json') {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid content type',
-                message: 'Request must be application/json'
-            });
-        }
-
-        // Extract fields from request body
-        const {
-            idNumber,
-            contactInfo,
-            homeAddress,
-            password
-        } = req.body;
-
-        // Validate required fields
-        const missingFields = [];
-        
-        if (!idNumber) missingFields.push('idNumber');
-        if (!contactInfo?.email) missingFields.push('contactInfo.email');
-        if (!contactInfo?.phone) missingFields.push('contactInfo.phone');
-        if (!homeAddress?.streetAddress) missingFields.push('homeAddress.streetAddress');
-        if (!homeAddress?.town) missingFields.push('homeAddress.town');
-        if (!homeAddress?.city) missingFields.push('homeAddress.city');
-        if (!homeAddress?.province) missingFields.push('homeAddress.province');
-        if (!homeAddress?.postalCode) missingFields.push('homeAddress.postalCode');
-        if (!password) missingFields.push('password');
-
-        if (missingFields.length > 0) {
-            return res.status(400).json({
-                success: false,
-                error: 'Missing required fields',
-                missingFields,
-                debug: {
-                    receivedFields: Object.keys(req.body),
-                    contentType: req.headers['content-type']
-                }
-            });
-        }
-
-        // Check if user already exists
-        const existingUser = await User.findOne({
-            where: {
-                [Op.or]: [
-                    { id_number: idNumber },
-                    { email: contactInfo.email }
-                ]
-            }
-        });
-
-        if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'User already registered',
-                details: existingUser.email === contactInfo.email ? 
-                    'Email already in use' : 'ID number already registered'
-            });
-        }
-
-        // Verify with Home Affairs
-        const verificationResult = await verifyIdWithHomeAffairs(idNumber);
-        if (!verificationResult.success) {
-            return res.status(400).json({
-                success: false,
-                message: verificationResult.message,
-                details: verificationResult.details || 'ID verification failed'
-            });
-        }
-
-        // Generate tax number if needed
-        const taxNumber = generateTaxNumber(idNumber);
-
-        // Generate username if not provided
-        const username = req.body.username || `user_${Date.now()}`;
-
-        // Extract date of birth from ID number
-        const dateOfBirth = extractDateOfBirth(idNumber);
-
-        // Create new user (password will be hashed by model hooks)
-        const user = await User.create({
-            id_number: idNumber,
-            username,
-            email: contactInfo.email,
-            phone_number: contactInfo.phone || null,
-            password_hash: password, // Pass plain password, model will hash it
-            first_name: verificationResult.data?.firstName || verificationResult.citizen?.firstName,
-            last_name: verificationResult.data?.lastName || verificationResult.citizen?.lastName,
-            date_of_birth: dateOfBirth,
-            tax_number: taxNumber,
-            home_address: homeAddress,
-            status: User.STATUS?.PENDING_VERIFICATION || 'pending_verification',
-            home_affairs_verified: true,
-            is_active: true,
-            is_verified: false
-        });
-
-        // Generate JWT token
-        const token = jwt.sign(
-            { 
-                userId: user.id,
-                idNumber: user.id_number
-            },
-            process.env.JWT_SECRET || 'fallback-secret-key',
-            { expiresIn: '24h' }
-        );
-
-        res.status(201).json({
-            success: true,
-            message: 'Citizen registered successfully',
-            data: {
-                user: {
-                    id: user.id,
-                    username: user.username,
-                    email: user.email,
-                    firstName: user.first_name,
-                    lastName: user.last_name,
-                    fullName: `${user.first_name} ${user.last_name}`,
-                    idNumber: user.id_number,
-                    dateOfBirth: user.date_of_birth,
-                    phoneNumber: user.phone_number,
-                    taxNumber: user.tax_number,
-                    homeAffairsVerified: user.home_affairs_verified,
-                    isActive: user.is_active,
-                    isVerified: user.is_verified,
-                    status: user.status,
-                    userType: 'Individual'
-                },
-                token,
-                registrationComplete: !!user.phone_number,
-                missingInfo: {
-                    phoneNumber: !user.phone_number
-                }
-            }
-        });
-
-    } catch (error) {
-        console.error('Error in /citizen route:', error);
-        logger.error('Registration error:', error);
-        return res.status(500).json({
-            success: false,
-            error: 'Internal server error',
-            message: 'Registration failed due to server error',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+    // Validate request content type
+    if (req.headers['content-type'] !== 'application/json') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid content type',
+        message: 'Request must be application/json'
+      });
     }
+
+    // Extract fields from request body
+    const {
+      idNumber,
+      contactInfo,
+      homeAddress,
+      password
+    } = req.body;
+
+    // Validate required fields
+    const missingFields = [];
+        
+    if (!idNumber) missingFields.push('idNumber');
+    if (!contactInfo?.email) missingFields.push('contactInfo.email');
+    if (!contactInfo?.phone) missingFields.push('contactInfo.phone');
+    if (!homeAddress?.streetAddress) missingFields.push('homeAddress.streetAddress');
+    if (!homeAddress?.town) missingFields.push('homeAddress.town');
+    if (!homeAddress?.city) missingFields.push('homeAddress.city');
+    if (!homeAddress?.province) missingFields.push('homeAddress.province');
+    if (!homeAddress?.postalCode) missingFields.push('homeAddress.postalCode');
+    if (!password) missingFields.push('password');
+
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        missingFields,
+        debug: {
+          receivedFields: Object.keys(req.body),
+          contentType: req.headers['content-type']
+        }
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      where: {
+        [Op.or]: [
+          { id_number: idNumber },
+          { email: contactInfo.email }
+        ]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already registered',
+        details: existingUser.email === contactInfo.email ? 
+          'Email already in use' : 'ID number already registered'
+      });
+    }
+
+    // Verify with Home Affairs
+    const verificationResult = await verifyIdWithHomeAffairs(idNumber);
+    if (!verificationResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: verificationResult.message,
+        details: verificationResult.details || 'ID verification failed'
+      });
+    }
+
+    // Generate tax number if needed
+    const taxNumber = generateTaxNumber(idNumber);
+
+    // Generate username if not provided
+    const username = req.body.username || `user_${Date.now()}`;
+
+    // Extract date of birth from ID number
+    const dateOfBirth = extractDateOfBirth(idNumber);
+
+    // Create new user (password will be hashed by model hooks)
+    const user = await User.create({
+      id_number: idNumber,
+      username,
+      email: contactInfo.email,
+      phone_number: contactInfo.phone || null,
+      password_hash: password, // Pass plain password, model will hash it
+      first_name: verificationResult.data?.firstName || verificationResult.citizen?.firstName,
+      last_name: verificationResult.data?.lastName || verificationResult.citizen?.lastName,
+      date_of_birth: dateOfBirth,
+      tax_number: taxNumber,
+      home_address: homeAddress,
+      status: User.STATUS?.PENDING_VERIFICATION || 'pending_verification',
+      home_affairs_verified: true,
+      is_active: true,
+      is_verified: false
+    });
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id,
+        idNumber: user.id_number
+      },
+      process.env.JWT_SECRET || 'fallback-secret-key',
+      { expiresIn: '24h' }
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Citizen registered successfully',
+      data: {
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          fullName: `${user.first_name} ${user.last_name}`,
+          idNumber: user.id_number,
+          dateOfBirth: user.date_of_birth,
+          phoneNumber: user.phone_number,
+          taxNumber: user.tax_number,
+          homeAffairsVerified: user.home_affairs_verified,
+          isActive: user.is_active,
+          isVerified: user.is_verified,
+          status: user.status,
+          userType: 'Individual'
+        },
+        token,
+        registrationComplete: !!user.phone_number,
+        missingInfo: {
+          phoneNumber: !user.phone_number
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in /citizen route:', error);
+    logger.error('Registration error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: 'Registration failed due to server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
 
 // Test route for file uploads
 router.post('/test-upload', async (req, res) => {
-    try {
-        console.log('\n🔍 Test Upload Debug:');
-        console.log('Headers:', req.headers);
-        console.log('Files:', req.files);
-        console.log('Body:', req.body);
+  try {
+    console.log('\n🔍 Test Upload Debug:');
+    console.log('Headers:', req.headers);
+    console.log('Files:', req.files);
+    console.log('Body:', req.body);
 
-        if (!req.files || Object.keys(req.files).length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'No files were uploaded',
-                debug: {
-                    contentType: req.headers['content-type'],
-                    hasFiles: !!req.files,
-                    body: req.body
-                }
-            });
+    if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No files were uploaded',
+        debug: {
+          contentType: req.headers['content-type'],
+          hasFiles: !!req.files,
+          body: req.body
         }
-
-        // Log each file received
-        Object.keys(req.files).forEach(key => {
-            const file = req.files[key];
-            console.log(`File ${key}:`, {
-                name: file.name,
-                size: file.size,
-                mimetype: file.mimetype,
-                tempFilePath: file.tempFilePath
-            });
-        });
-
-        res.status(200).json({
-            success: true,
-            message: 'Files received successfully',
-            files: Object.keys(req.files).map(key => ({
-                fieldName: key,
-                originalName: req.files[key].name,
-                size: req.files[key].size,
-                mimetype: req.files[key].mimetype
-            })),
-            body: req.body
-        });
-    } catch (error) {
-        console.error('Test upload error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error processing file upload',
-            error: error.message
-        });
+      });
     }
+
+    // Log each file received
+    Object.keys(req.files).forEach(key => {
+      const file = req.files[key];
+      console.log(`File ${key}:`, {
+        name: file.name,
+        size: file.size,
+        mimetype: file.mimetype,
+        tempFilePath: file.tempFilePath
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Files received successfully',
+      files: Object.keys(req.files).map(key => ({
+        fieldName: key,
+        originalName: req.files[key].name,
+        size: req.files[key].size,
+        mimetype: req.files[key].mimetype
+      })),
+      body: req.body
+    });
+  } catch (error) {
+    console.error('Test upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing file upload',
+      error: error.message
+    });
+  }
 });
 
 /**

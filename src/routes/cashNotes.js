@@ -110,7 +110,7 @@ router.get('/:id/transfer-history', CashNoteController.getTransferHistory);
  *   }>
  * }
  */
-router.post('/bulk-register', async (req, res) => {
+router.post('/bulk-register', async(req, res) => {
   try {
     const { cashNotes } = req.body;
     const userId = req.user?.id;
@@ -135,26 +135,26 @@ router.post('/bulk-register', async (req, res) => {
     // Process each cash note
     for (let i = 0; i < cashNotes.length; i++) {
       const note = cashNotes[i];
-      
+
       try {
         // Simulate individual registration
-        const mockReq = { 
-          body: { 
-            ...note, 
-            userId 
-          }, 
+        const mockReq = {
+          body: {
+            ...note,
+            userId
+          },
           user: req.user,
           ip: req.ip,
           get: req.get.bind(req)
         };
-        
+
         const mockRes = {
           status: (code) => mockRes,
           json: (data) => data
         };
 
         const result = await CashNoteController.registerCashNote(mockReq, mockRes);
-        
+
         if (result.success) {
           results.push({
             index: i,
@@ -169,7 +169,7 @@ router.post('/bulk-register', async (req, res) => {
             error: result.message
           });
         }
-        
+
       } catch (error) {
         errors.push({
           index: i,
@@ -214,7 +214,7 @@ router.post('/bulk-register', async (req, res) => {
  *   purpose?: string
  * }
  */
-router.post('/proxy-authorize', async (req, res) => {
+router.post('/proxy-authorize', async(req, res) => {
   try {
     const { proxyUserId, authorizationMethod, maxAmount, validUntil, purpose } = req.body;
     const authorizingUserId = req.user?.id;
@@ -228,13 +228,13 @@ router.post('/proxy-authorize', async (req, res) => {
 
     // Generate authorization code
     const authorizationCode = `PXY-${Date.now()}-${Math.floor(Math.random() * 9999).toString().padStart(4, '0')}`;
-    
+
     // Set expiry (default 24 hours)
     const expiresAt = validUntil ? new Date(validUntil) : new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     // In a real implementation, this would be stored in a ProxyAuthorization model
     // For Phase 1, we'll return the authorization details
-    
+
     return res.json({
       success: true,
       message: 'Proxy authorization created successfully',
@@ -264,7 +264,7 @@ router.post('/proxy-authorize', async (req, res) => {
  * @desc    Get user's cash note statistics
  * @access  Private
  */
-router.get('/statistics', async (req, res) => {
+router.get('/statistics', async(req, res) => {
   try {
     const userId = req.user?.id;
     const { CashNote, CashNoteTransfer } = await import('../models/index.js');

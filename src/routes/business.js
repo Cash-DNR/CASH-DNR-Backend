@@ -1,5 +1,5 @@
 import express from 'express';
-import { body, query, validationResult } from 'express-validator';
+import { body, validationResult } from 'express-validator';
 import { Business } from '../models/index.js';
 import { verifyIdWithHomeAffairs } from '../services/homeAffairs.js';
 import logger from '../services/logger.js';
@@ -26,7 +26,7 @@ router.post('/register', [
   body('contactInfo.phone')
     .matches(/^\+27\s\d{2}\s\d{3}\s\d{4}$/)
     .withMessage('Valid South African phone number required (format: +27 11 123 4567)')
-], async (req, res) => {
+], async(req, res) => {
   try {
     // Validate request
     const errors = validationResult(req);

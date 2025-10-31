@@ -62,8 +62,8 @@ class CashNoteTransfer extends Model {
    * Check if transfer can be reversed
    */
   canBeReversed() {
-    return this.status === CashNoteTransfer.STATUS.COMPLETED && 
-           this.is_reversible && 
+    return this.status === CashNoteTransfer.STATUS.COMPLETED &&
+           this.is_reversible &&
            !this.is_reversed;
   }
 

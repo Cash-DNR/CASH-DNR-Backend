@@ -1,5 +1,7 @@
 import TransactionLog from '../models/TransactionLog.js';
 import AuditLog from '../models/AuditLog.js';
+import User from '../models/User.js';
+import { Op } from 'sequelize';
 import logger from './logger.js';
 
 class TransactionLoggingService {
@@ -61,7 +63,7 @@ class TransactionLoggingService {
   static async logTransactionUpdated(transactionId, oldValues, newValues, userId, requestMetadata = {}) {
     try {
       const changes = this.getChangedFields(oldValues, newValues);
-      
+
       const logEntry = await TransactionLog.create({
         transaction_id: transactionId,
         user_id: userId,
@@ -107,7 +109,7 @@ class TransactionLoggingService {
   static async logStatusChange(transactionId, oldStatus, newStatus, userId, reason = '', requestMetadata = {}) {
     try {
       const severity = this.getSeverityForStatusChange(oldStatus, newStatus);
-      
+
       const logEntry = await TransactionLog.create({
         transaction_id: transactionId,
         user_id: userId,
@@ -232,7 +234,7 @@ class TransactionLoggingService {
   static async getTransactionLogs(transactionId, options = {}) {
     try {
       const { page = 1, limit = 50, logType = null } = options;
-      
+
       const whereClause = { transaction_id: transactionId };
       if (logType) {
         whereClause.log_type = logType;
@@ -349,7 +351,7 @@ class TransactionLoggingService {
    */
   static getChangedFields(oldValues, newValues) {
     const changes = {};
-    
+
     Object.keys(newValues).forEach(key => {
       if (oldValues[key] !== newValues[key]) {
         changes[key] = {
@@ -372,7 +374,7 @@ class TransactionLoggingService {
     if (Object.keys(changes).some(field => criticalFields.includes(field))) {
       return TransactionLog.SEVERITY.HIGH;
     }
-    
+
     if (Object.keys(changes).some(field => highFields.includes(field))) {
       return TransactionLog.SEVERITY.MEDIUM;
     }

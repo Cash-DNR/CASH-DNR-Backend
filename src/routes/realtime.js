@@ -1,31 +1,31 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import Notification from '../models/Notification.js';
 import UserActivity from '../models/UserActivity.js';
 import CashNote from '../models/CashNote.js';
 import Transaction from '../models/Transaction.js';
 import User from '../models/User.js';
-import { 
-  sendNotificationToUser, 
-  sendBalanceUpdate, 
+import {
+  sendNotificationToUser,
+  sendBalanceUpdate,
   sendCashNoteUpdate,
-  sendActivityUpdate,
   broadcastSystemNotification,
   getActiveUsers,
-  isUserOnline 
+  isUserOnline
 } from '../services/realtimeService.js';
+import { Op } from 'sequelize';
+import { sequelize } from '../config/database.js';
 import logger from '../services/logger.js';
 
 const router = express.Router();
 
 // Get user activity feed
-router.get('/feed', authenticateToken, async (req, res) => {
+router.get('/feed', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { page = 1, limit = 20, type } = req.query;
 
     const where = { userId };
-    
+
     if (type) {
       where.type = type;
     }
@@ -61,10 +61,10 @@ router.get('/feed', authenticateToken, async (req, res) => {
 });
 
 // Get online users
-router.get('/online-users', authenticateToken, async (req, res) => {
+router.get('/online-users', authenticateToken, async(req, res) => {
   try {
     const activeUsers = getActiveUsers();
-    
+
     res.json({
       success: true,
       data: {
@@ -88,12 +88,12 @@ router.get('/online-users', authenticateToken, async (req, res) => {
 });
 
 // Check if specific user is online
-router.get('/users/:userId/online-status', authenticateToken, async (req, res) => {
+router.get('/users/:userId/online-status', authenticateToken, async(req, res) => {
   try {
     const { userId } = req.params;
-    
+
     const isOnline = isUserOnline(userId);
-    
+
     res.json({
       success: true,
       data: {
@@ -113,7 +113,7 @@ router.get('/users/:userId/online-status', authenticateToken, async (req, res) =
 });
 
 // Get system activity overview (admin only)
-router.get('/system-overview', authenticateToken, async (req, res) => {
+router.get('/system-overview', authenticateToken, async(req, res) => {
   try {
     // Check if user has admin permissions
     const userRole = req.user.role || 'user';
@@ -131,21 +131,21 @@ router.get('/system-overview', authenticateToken, async (req, res) => {
     const stats = await Promise.all([
       // Active users
       getActiveUsers().length,
-      
+
       // Activities in last 24 hours
       UserActivity.count({
         where: {
           createdAt: { [Op.gte]: last24Hours }
         }
       }),
-      
+
       // Activities in last hour
       UserActivity.count({
         where: {
           createdAt: { [Op.gte]: lastHour }
         }
       }),
-      
+
       // Activity by type (last 24 hours)
       UserActivity.findAll({
         attributes: [
@@ -158,7 +158,7 @@ router.get('/system-overview', authenticateToken, async (req, res) => {
         group: ['type'],
         raw: true
       }),
-      
+
       // Recent activities
       UserActivity.findAll({
         include: [
@@ -195,7 +195,7 @@ router.get('/system-overview', authenticateToken, async (req, res) => {
 });
 
 // Log custom activity
-router.post('/log', authenticateToken, async (req, res) => {
+router.post('/log', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { type, description, metadata } = req.body;
@@ -240,7 +240,7 @@ router.post('/log', authenticateToken, async (req, res) => {
 });
 
 // Get user connection history
-router.get('/connection-history', authenticateToken, async (req, res) => {
+router.get('/connection-history', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { page = 1, limit = 20 } = req.query;
@@ -281,7 +281,7 @@ router.get('/connection-history', authenticateToken, async (req, res) => {
 });
 
 // Send notification to specific user (admin only)
-router.post('/notifications/send', authenticateToken, async (req, res) => {
+router.post('/notifications/send', authenticateToken, async(req, res) => {
   try {
     const { userId, type, title, message, priority = 'medium', metadata = {} } = req.body;
 
@@ -313,7 +313,7 @@ router.post('/notifications/send', authenticateToken, async (req, res) => {
 });
 
 // Broadcast system notification (admin only)
-router.post('/notifications/broadcast', authenticateToken, async (req, res) => {
+router.post('/notifications/broadcast', authenticateToken, async(req, res) => {
   try {
     const { title, message, priority = 'medium', metadata = {} } = req.body;
 
@@ -339,7 +339,7 @@ router.post('/notifications/broadcast', authenticateToken, async (req, res) => {
 });
 
 // Send balance update to user
-router.post('/balance-update', authenticateToken, async (req, res) => {
+router.post('/balance-update', authenticateToken, async(req, res) => {
   try {
     const { userId, balanceData } = req.body;
 
@@ -362,8 +362,8 @@ router.post('/balance-update', authenticateToken, async (req, res) => {
   }
 });
 
-// Send cash note update to user  
-router.post('/cash-note-update', authenticateToken, async (req, res) => {
+// Send cash note update to user
+router.post('/cash-note-update', authenticateToken, async(req, res) => {
   try {
     const { userId, cashNoteData } = req.body;
 
@@ -387,7 +387,7 @@ router.post('/cash-note-update', authenticateToken, async (req, res) => {
 });
 
 // Get user's current balance and cash notes
-router.get('/balance', authenticateToken, async (req, res) => {
+router.get('/balance', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
 
@@ -431,7 +431,7 @@ router.get('/balance', authenticateToken, async (req, res) => {
 });
 
 // Get user's recent transactions
-router.get('/transactions/recent', authenticateToken, async (req, res) => {
+router.get('/transactions/recent', authenticateToken, async(req, res) => {
   try {
     const userId = req.user.userId;
     const { limit = 10 } = req.query;
@@ -451,7 +451,7 @@ router.get('/transactions/recent', authenticateToken, async (req, res) => {
         },
         {
           model: User,
-          as: 'toUser', 
+          as: 'toUser',
           attributes: ['id', 'firstName', 'lastName', 'email']
         }
       ],

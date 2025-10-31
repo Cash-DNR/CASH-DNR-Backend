@@ -29,7 +29,7 @@ const TAX_RETURN_TYPES = {
   PAYE: {
     code: 'PAYE',
     name: 'Pay As You Earn',
-    periods: Array.from({length: 12}, (_, i) => (i + 1).toString().padStart(2, '0')),
+    periods: Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0')),
     periodType: 'month'
   },
   ITR: {
@@ -53,7 +53,7 @@ const TAX_RETURN_TYPES = {
  */
 export async function verifyWithSARS(idNumber) {
   const apiUrl = process.env.SARS_API_URL || DEFAULT_SARS_API_URL;
-  
+
   try {
     logger.info(`🔍 Verifying tax status for ID: ${idNumber}`);
     const response = await fetch(`${apiUrl}/taxpayers/${idNumber}/verification`);
@@ -145,7 +145,7 @@ export async function sarsComplianceChecker(req, res, next) {
 
     // Validate compliance
     const complianceValidation = validateTaxCompliance(sarsResponse.complianceDetails);
-    
+
     // Attach both SARS data and compliance validation to request object
     req.sarsData = {
       ...sarsResponse,
@@ -175,14 +175,14 @@ export function generateTaxNumber(idNumber) {
   // Tax number format: T + last 9 digits of ID + checksum digit
   const baseNumber = idNumber.slice(-9);
   const prefix = 'T';
-  
+
   // Calculate checksum (simple implementation)
   let sum = 0;
   for (let i = 0; i < baseNumber.length; i++) {
     sum += parseInt(baseNumber[i]) * (i + 1);
   }
   const checksum = (sum % 9).toString();
-  
+
   return `${prefix}${baseNumber}${checksum}`;
 }
 

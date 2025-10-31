@@ -13,9 +13,9 @@ import logger from '../services/logger.js';
 export async function up() {
   try {
     logger.info('🚀 Starting Initial Migration - Base Tables');
-    
+
     const queryInterface = sequelize.getQueryInterface();
-    
+
     // Create users table first (referenced by other tables)
     logger.info('📝 Creating users table...');
     await queryInterface.createTable('users', {
@@ -110,14 +110,14 @@ export async function up() {
         defaultValue: Sequelize.NOW
       }
     });
-    
+
     // Add indexes for users table
     await queryInterface.addIndex('users', ['email']);
     await queryInterface.addIndex('users', ['id_number']);
     await queryInterface.addIndex('users', ['username']);
-    
+
     logger.info('✅ users table created successfully');
-    
+
     // Create businesses table
     logger.info('📝 Creating businesses table...');
     await queryInterface.createTable('businesses', {
@@ -184,12 +184,12 @@ export async function up() {
         defaultValue: Sequelize.NOW
       }
     });
-    
+
     await queryInterface.addIndex('businesses', ['owner_id']);
     await queryInterface.addIndex('businesses', ['registration_number']);
-    
+
     logger.info('✅ businesses table created successfully');
-    
+
     // Create transactions table
     logger.info('📝 Creating transactions table...');
     await queryInterface.createTable('transactions', {
@@ -268,14 +268,14 @@ export async function up() {
         defaultValue: Sequelize.NOW
       }
     });
-    
+
     await queryInterface.addIndex('transactions', ['user_id']);
     await queryInterface.addIndex('transactions', ['business_id']);
     await queryInterface.addIndex('transactions', ['reference']);
     await queryInterface.addIndex('transactions', ['transaction_date']);
-    
+
     logger.info('✅ transactions table created successfully');
-    
+
     // Create files table
     logger.info('📝 Creating files table...');
     await queryInterface.createTable('files', {
@@ -346,20 +346,20 @@ export async function up() {
         defaultValue: Sequelize.NOW
       }
     });
-    
+
     await queryInterface.addIndex('files', ['user_id']);
     await queryInterface.addIndex('files', ['file_type']);
     await queryInterface.addIndex('files', ['upload_date']);
-    
+
     logger.info('✅ files table created successfully');
-    
+
     logger.info('🎉 Initial Migration completed successfully!');
     logger.info('📊 Base tables created:');
     logger.info('   ✓ users');
     logger.info('   ✓ businesses');
     logger.info('   ✓ transactions');
     logger.info('   ✓ files');
-    
+
   } catch (error) {
     logger.error('❌ Initial Migration failed:', error);
     throw error;
@@ -372,17 +372,17 @@ export async function up() {
 export async function down() {
   try {
     logger.info('🔄 Rolling back Initial Migration...');
-    
+
     const queryInterface = sequelize.getQueryInterface();
-    
+
     // Drop tables in reverse order of creation (to handle foreign keys)
     await queryInterface.dropTable('files');
     await queryInterface.dropTable('transactions');
     await queryInterface.dropTable('businesses');
     await queryInterface.dropTable('users');
-    
+
     logger.info('✅ Initial Migration rollback completed');
-    
+
   } catch (error) {
     logger.error('❌ Initial Migration rollback failed:', error);
     throw error;

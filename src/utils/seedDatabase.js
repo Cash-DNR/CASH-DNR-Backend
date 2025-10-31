@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 import logger from '../services/logger.js';
 
 // Import models
-import { User, Business, CashNote, CashNoteTransfer, AuditLog } from '../models/index.js';
+import { User, TaxId } from '../models/index.js';
 
 /**
  * Create sample users for testing
@@ -16,9 +16,9 @@ import { User, Business, CashNote, CashNoteTransfer, AuditLog } from '../models/
 async function seedUsers() {
   try {
     logger.info('👥 Seeding sample users...');
-    
+
     const hashedPassword = await bcrypt.hash('password123', 12);
-    
+
     const sampleUsers = [
       {
         username: 'john.doe',
@@ -81,24 +81,24 @@ async function seedUsers() {
         cash_holding_limit: 25000.00
       }
     ];
-    
+
     const createdUsers = [];
-    
+
     for (const userData of sampleUsers) {
       const [user, created] = await User.findOrCreate({
         where: { email: userData.email },
         defaults: userData
       });
-      
+
       if (created) {
         logger.info(`✅ Created user: ${user.username}`);
       } else {
         logger.info(`ℹ️ User already exists: ${user.username}`);
       }
-      
+
       createdUsers.push(user);
     }
-    
+
     return createdUsers;
   } catch (error) {
     logger.error('❌ Error seeding users:', error);
@@ -112,7 +112,7 @@ async function seedUsers() {
 async function seedCashNotes(users) {
   try {
     logger.info('💰 Seeding sample cash notes...');
-    
+
     const sampleCashNotes = [
       {
         reference_code: 'CN-241217-1001-45',
@@ -165,24 +165,24 @@ async function seedCashNotes(users) {
         metadata: { source: 'seed_data' }
       }
     ];
-    
+
     const createdNotes = [];
-    
+
     for (const noteData of sampleCashNotes) {
       const [note, created] = await CashNote.findOrCreate({
         where: { reference_code: noteData.reference_code },
         defaults: noteData
       });
-      
+
       if (created) {
         logger.info(`✅ Created cash note: ${note.reference_code} (${note.note_type})`);
       } else {
         logger.info(`ℹ️ Cash note already exists: ${note.reference_code}`);
       }
-      
+
       createdNotes.push(note);
     }
-    
+
     return createdNotes;
   } catch (error) {
     logger.error('❌ Error seeding cash notes:', error);
@@ -196,7 +196,7 @@ async function seedCashNotes(users) {
 async function seedTransfers(users, cashNotes) {
   try {
     logger.info('🔄 Seeding sample transfers...');
-    
+
     const sampleTransfers = [
       {
         cash_note_id: cashNotes[0].id,
@@ -221,22 +221,22 @@ async function seedTransfers(users, cashNotes) {
         metadata: { source: 'seed_data', notes: 'Coffee purchase' }
       }
     ];
-    
+
     const createdTransfers = [];
-    
+
     for (const transferData of sampleTransfers) {
       const [transfer, created] = await CashNoteTransfer.findOrCreate({
-        where: { 
+        where: {
           cash_note_id: transferData.cash_note_id,
           from_user_id: transferData.from_user_id,
           to_user_id: transferData.to_user_id
         },
         defaults: transferData
       });
-      
+
       if (created) {
         logger.info(`✅ Created transfer: ${transfer.transfer_reference}`);
-        
+
         // Update cash note ownership
         const cashNote = await CashNote.findByPk(transferData.cash_note_id);
         if (cashNote) {
@@ -249,10 +249,10 @@ async function seedTransfers(users, cashNotes) {
       } else {
         logger.info(`ℹ️ Transfer already exists: ${transfer.transfer_reference}`);
       }
-      
+
       createdTransfers.push(transfer);
     }
-    
+
     return createdTransfers;
   } catch (error) {
     logger.error('❌ Error seeding transfers:', error);
@@ -266,7 +266,7 @@ async function seedTransfers(users, cashNotes) {
 async function seedAuditLogs(users, cashNotes) {
   try {
     logger.info('📝 Seeding sample audit logs...');
-    
+
     const sampleAuditLogs = [
       {
         user_id: users[0].id,
@@ -303,15 +303,15 @@ async function seedAuditLogs(users, cashNotes) {
         metadata: { source: 'seed_data', ip_address: '127.0.0.1' }
       }
     ];
-    
+
     const createdLogs = [];
-    
+
     for (const logData of sampleAuditLogs) {
       const log = await AuditLog.create(logData);
       logger.info(`✅ Created audit log: ${log.action_type} for ${log.entity_type}`);
       createdLogs.push(log);
     }
-    
+
     return createdLogs;
   } catch (error) {
     logger.error('❌ Error seeding audit logs:', error);
@@ -325,24 +325,24 @@ async function seedAuditLogs(users, cashNotes) {
 async function seedDatabase() {
   try {
     logger.info('🌱 Starting database seeding for Phase 1...');
-    
+
     // Test database connection
     await sequelize.authenticate();
     logger.info('✅ Database connection established');
-    
+
     // Seed in order (respecting foreign key constraints)
     const users = await seedUsers();
     const cashNotes = await seedCashNotes(users);
     const transfers = await seedTransfers(users, cashNotes);
     const auditLogs = await seedAuditLogs(users, cashNotes);
-    
+
     logger.info('🎉 Database seeding completed successfully!');
     logger.info('📊 Seeded Data Summary:');
     logger.info(`   Users: ${users.length}`);
     logger.info(`   Cash Notes: ${cashNotes.length}`);
     logger.info(`   Transfers: ${transfers.length}`);
     logger.info(`   Audit Logs: ${auditLogs.length}`);
-    
+
     return {
       users,
       cashNotes,
@@ -361,21 +361,21 @@ async function seedDatabase() {
 async function clearSeedData() {
   try {
     logger.info('🧹 Clearing seed data...');
-    
+
     // Delete in reverse order to respect foreign key constraints
     await AuditLog.destroy({ where: { 'metadata.source': 'seed_data' } });
     await CashNoteTransfer.destroy({ where: { 'metadata.source': 'seed_data' } });
     await CashNote.destroy({ where: { 'metadata.source': 'seed_data' } });
-    
+
     // Delete seed users (be careful with this)
     const seedUserEmails = [
       'john.doe@example.com',
-      'jane.smith@example.com', 
+      'jane.smith@example.com',
       'mike.wilson@example.com'
     ];
-    
+
     await User.destroy({ where: { email: seedUserEmails } });
-    
+
     logger.info('✅ Seed data cleared');
   } catch (error) {
     logger.error('❌ Error clearing seed data:', error);
@@ -386,27 +386,27 @@ async function clearSeedData() {
 // Main function for CLI usage
 async function main() {
   const action = process.argv[2] || 'seed';
-  
+
   try {
     switch (action) {
-      case 'seed':
-        await seedDatabase();
-        break;
-        
-      case 'clear':
-        await clearSeedData();
-        break;
-        
-      case 'reset':
-        await clearSeedData();
-        await seedDatabase();
-        break;
-        
-      default:
-        logger.info('Available commands:');
-        logger.info('  seed - Seed database with sample data');
-        logger.info('  clear - Clear all seed data');
-        logger.info('  reset - Clear and re-seed database');
+    case 'seed':
+      await seedDatabase();
+      break;
+
+    case 'clear':
+      await clearSeedData();
+      break;
+
+    case 'reset':
+      await clearSeedData();
+      await seedDatabase();
+      break;
+
+    default:
+      logger.info('Available commands:');
+      logger.info('  seed - Seed database with sample data');
+      logger.info('  clear - Clear all seed data');
+      logger.info('  reset - Clear and re-seed database');
     }
   } catch (error) {
     logger.error('Seeding operation failed:', error);

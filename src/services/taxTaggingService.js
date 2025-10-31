@@ -5,7 +5,7 @@ import logger from './logger.js';
 class TaxTaggingService {
   // VAT rate in South Africa
   static VAT_RATE = 0.15;
-  
+
   // Threshold amounts for different tax implications
   static THRESHOLDS = {
     SMALL_TRANSACTION: 1000,      // R1,000
@@ -94,7 +94,7 @@ class TaxTaggingService {
       }
 
       logger.info(`Tax classification completed for transaction amount ${amount}: ${classification.tax_classification}`);
-      
+
       return classification;
     } catch (error) {
       logger.error('Error in tax classification:', error);
@@ -156,7 +156,7 @@ class TaxTaggingService {
     };
 
     // Check for business expense keywords
-    const businessMatches = this.BUSINESS_EXPENSE_KEYWORDS.filter(keyword => 
+    const businessMatches = this.BUSINESS_EXPENSE_KEYWORDS.filter(keyword =>
       purposeLower.includes(keyword)
     );
 
@@ -167,7 +167,7 @@ class TaxTaggingService {
     }
 
     // Check for personal expense keywords
-    const personalMatches = this.PERSONAL_EXPENSE_KEYWORDS.filter(keyword => 
+    const personalMatches = this.PERSONAL_EXPENSE_KEYWORDS.filter(keyword =>
       purposeLower.includes(keyword)
     );
 
@@ -178,7 +178,7 @@ class TaxTaggingService {
     }
 
     // Check for exempt keywords
-    const exemptMatches = this.EXEMPT_KEYWORDS.filter(keyword => 
+    const exemptMatches = this.EXEMPT_KEYWORDS.filter(keyword =>
       purposeLower.includes(keyword)
     );
 
@@ -217,7 +217,7 @@ class TaxTaggingService {
     if (receiverInfo.name) {
       const businessIndicators = ['pty', 'ltd', 'cc', 'inc', 'company', 'corporation', 'enterprise'];
       const nameLower = receiverInfo.name.toLowerCase();
-      
+
       if (businessIndicators.some(indicator => nameLower.includes(indicator))) {
         analysis.confidence += 20;
         analysis.reasoning.push('Receiver name indicates business entity');
@@ -258,22 +258,22 @@ class TaxTaggingService {
    */
   static makeFinalClassification(confidenceScore, suggestedCategory, riskLevel, flags) {
     let classification = Transaction.TAX_CLASSIFICATION.REVIEW_REQUIRED;
-    let category = suggestedCategory;
+    const category = suggestedCategory;
 
     // High confidence classifications
     if (confidenceScore >= 60) {
       switch (suggestedCategory) {
-        case 'business_expense':
-          classification = Transaction.TAX_CLASSIFICATION.TAXABLE_BUSINESS;
-          break;
-        case 'personal_expense':
-          classification = Transaction.TAX_CLASSIFICATION.TAXABLE_PERSONAL;
-          break;
-        case 'exempt':
-          classification = Transaction.TAX_CLASSIFICATION.EXEMPT;
-          break;
-        default:
-          classification = Transaction.TAX_CLASSIFICATION.NON_TAXABLE;
+      case 'business_expense':
+        classification = Transaction.TAX_CLASSIFICATION.TAXABLE_BUSINESS;
+        break;
+      case 'personal_expense':
+        classification = Transaction.TAX_CLASSIFICATION.TAXABLE_PERSONAL;
+        break;
+      case 'exempt':
+        classification = Transaction.TAX_CLASSIFICATION.EXEMPT;
+        break;
+      default:
+        classification = Transaction.TAX_CLASSIFICATION.NON_TAXABLE;
       }
     } else if (confidenceScore >= 40) {
       // Medium confidence - still needs review but with suggestion
@@ -304,7 +304,7 @@ class TaxTaggingService {
   static calculateVAT(amount) {
     const vatExclusiveAmount = amount / (1 + this.VAT_RATE);
     const vatAmount = amount - vatExclusiveAmount;
-    
+
     return {
       vat_inclusive_amount: parseFloat(amount),
       vat_exclusive_amount: parseFloat(vatExclusiveAmount.toFixed(2)),
@@ -322,8 +322,8 @@ class TaxTaggingService {
         transaction_id: transactionId,
         user_id: userId,
         log_type: TransactionLog.LOG_TYPES.TAX_CLASSIFIED,
-        severity: classificationResult.tax_classification === Transaction.TAX_CLASSIFICATION.REVIEW_REQUIRED 
-          ? TransactionLog.SEVERITY.MEDIUM 
+        severity: classificationResult.tax_classification === Transaction.TAX_CLASSIFICATION.REVIEW_REQUIRED
+          ? TransactionLog.SEVERITY.MEDIUM
           : TransactionLog.SEVERITY.LOW,
         message: `Transaction automatically classified as: ${classificationResult.tax_classification}`,
         new_values: {

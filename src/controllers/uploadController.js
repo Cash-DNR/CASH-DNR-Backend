@@ -33,7 +33,7 @@ const fileFilter = (req, file, cb) => {
   const allowedMimes = [
     'application/pdf',
     'image/jpeg',
-    'image/jpg', 
+    'image/jpg',
     'image/png',
     'image/gif',
     'application/msword',
@@ -69,7 +69,7 @@ export const upload = multer({
 export const uploadSingle = (req, res) => {
   try {
     logger.info('🚀 Single file upload request received');
-    
+
     if (!req.file) {
       logger.warn('❌ No file in upload request');
       return res.status(400).json({
@@ -79,7 +79,7 @@ export const uploadSingle = (req, res) => {
     }
 
     const { originalname, filename, path: filePath, mimetype, size } = req.file;
-    
+
     logger.info(`📤 File uploaded successfully:
       Original Name: ${originalname}
       Generated Name: ${filename}
@@ -117,7 +117,7 @@ export const uploadSingle = (req, res) => {
 export const uploadMultiple = (req, res) => {
   try {
     logger.info('🚀 Multiple file upload request received');
-    
+
     if (!req.files || req.files.length === 0) {
       logger.warn('❌ No files in upload request');
       return res.status(400).json({
@@ -220,12 +220,12 @@ export const downloadFile = (req, res) => {
 export const listFiles = (req, res) => {
   try {
     logger.info('📋 File list request received');
-    
+
     const files = fs.readdirSync(uploadsDir);
     const fileList = files.map(filename => {
       const filePath = path.join(uploadsDir, filename);
       const stats = fs.statSync(filePath);
-      
+
       return {
         filename,
         size: stats.size,

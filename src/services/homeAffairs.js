@@ -1,5 +1,5 @@
 /* eslint-disable linebreak-style */
-import logger from "./logger.js";
+import logger from './logger.js';
 import fetch from 'node-fetch';
 
 // Default timeout for API requests (30 seconds for production)
@@ -16,7 +16,7 @@ const DEFAULT_API_URL = 'https://cash-dnr-api.onrender.com/home-affairs';
 function cleanIdNumber(idNumber) {
   // Remove any non-digit characters
   const cleaned = idNumber.replace(/\D/g, '');
-  
+
   // Ensure it's exactly 13 digits
   if (cleaned.length !== 13) {
     throw new Error('ID number must be exactly 13 digits');
@@ -45,7 +45,7 @@ const VERIFICATION_TYPES = {
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
-  
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -63,16 +63,17 @@ async function fetchWithTimeout(url, options = {}) {
  * @returns {Promise<Object>} - Verification result
  */
 export async function verifyIdWithHomeAffairs(idNumber) {
+  // Clean and validate the ID number (move outside try block)
+  const cleanedId = cleanIdNumber(idNumber);
+
   try {
-    // Clean and validate the ID number
-    const cleanedId = cleanIdNumber(idNumber);
-    
+
     const apiUrl = process.env.HOME_AFFAIRS_API_URL || DEFAULT_API_URL;
     const endpoint = `${apiUrl}/home-affairs/citizens/${cleanedId}`;
-    
+
     logger.info(`🔍 Verifying ID number with Home Affairs API: ${cleanedId}`);
     logger.info(`🌐 Using endpoint: ${endpoint}`);
-    
+
     const response = await fetchWithTimeout(endpoint, {
       method: 'GET',
       headers: {
@@ -140,7 +141,7 @@ export async function verifyIdWithHomeAffairs(idNumber) {
 
   } catch (error) {
     logger.error(`❌ Home Affairs API error: ${error.message}`);
-    
+
     if (error.name === 'AbortError') {
       return {
         success: false,
@@ -168,17 +169,17 @@ function generateDemoData(idNumber) {
   const month = idNumber.substring(2, 4);
   const day = idNumber.substring(4, 6);
   const gender = parseInt(idNumber.substring(6, 10)) >= 5000 ? 'Male' : 'Female';
-  
+
   // Determine the century
   const currentYear = new Date().getFullYear() % 100;
   const century = parseInt(year) <= currentYear ? '20' : '19';
   const fullYear = `${century}${year}`;
-  
+
   return {
     success: true,
     data: {
       firstName: 'Demo',
-      lastName: 'User', 
+      lastName: 'User',
       dateOfBirth: `${fullYear}-${month}-${day}`,
       gender: gender,
       idNumber: idNumber,
@@ -207,9 +208,9 @@ export async function registerWithHomeAffairs(userData) {
 
   try {
     const registerEndpoint = `${apiUrl}/citizens/register`;
-    
+
     logger.info(`📝 Registering user with Home Affairs API: ${registerEndpoint}`);
-    
+
     const response = await fetch(registerEndpoint, {
       method: 'POST',
       headers: {

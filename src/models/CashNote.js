@@ -20,7 +20,7 @@ class CashNote extends Model {
   // Note types
   static NOTE_TYPES = {
     ZAR_10: 'ZAR_10',
-    ZAR_20: 'ZAR_20', 
+    ZAR_20: 'ZAR_20',
     ZAR_50: 'ZAR_50',
     ZAR_100: 'ZAR_100',
     ZAR_200: 'ZAR_200',
@@ -46,11 +46,11 @@ class CashNote extends Model {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     const sequence = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-    
+
     // Simple checksum calculation
     const base = `${year}${month}${day}${sequence}`;
     const checksum = base.split('').reduce((sum, digit) => sum + parseInt(digit), 0) % 99;
-    
+
     return `CN-${year}${month}${day}-${sequence}-${checksum.toString().padStart(2, '0')}`;
   }
 
@@ -68,7 +68,7 @@ class CashNote extends Model {
     const base = parts[1] + parts[2];
     const providedChecksum = parseInt(parts[3]);
     const calculatedChecksum = base.split('').reduce((sum, digit) => sum + parseInt(digit), 0) % 99;
-    
+
     return providedChecksum === calculatedChecksum;
   }
 
@@ -84,7 +84,7 @@ class CashNote extends Model {
    */
   async getCurrentOwner() {
     if (!this.current_owner_id) return null;
-    
+
     const { User } = await import('./User.js');
     return await User.findByPk(this.current_owner_id, {
       attributes: ['id', 'username', 'first_name', 'last_name', 'phone_number']
@@ -100,9 +100,9 @@ class CashNote extends Model {
     this.flagged_reason = reason;
     this.flagged_by = reportedBy;
     this.flagged_at = new Date();
-    
+
     await this.save();
-    
+
     // Log the action (import dynamically to avoid circular dependency)
     const { transactionLoggingService } = await import('../services/transactionLoggingService.js');
     await transactionLoggingService.logCashNoteFlagged(this, reportedBy, reason);

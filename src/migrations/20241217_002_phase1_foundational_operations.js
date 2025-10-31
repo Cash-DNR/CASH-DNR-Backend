@@ -1,7 +1,7 @@
 /**
  * Phase 1 Database Migration - Foundational Operations
  * Creates tables and fields needed for Phase 1 cash note management
- * 
+ *
  * Run this migration after setting up Phase 1 models
  */
 
@@ -14,7 +14,7 @@ const MIGRATION_NAME = '20241217_002_phase1_foundational_operations';
 /**
  * Create Cash Notes table
  */
-const createCashNotesTable = async (queryInterface) => {
+const createCashNotesTable = async(queryInterface) => {
   await queryInterface.createTable('cash_notes', {
     id: {
       type: DataTypes.UUID,
@@ -170,7 +170,7 @@ const createCashNotesTable = async (queryInterface) => {
 /**
  * Create Cash Note Transfers table
  */
-const createCashNoteTransfersTable = async (queryInterface) => {
+const createCashNoteTransfersTable = async(queryInterface) => {
   await queryInterface.createTable('cash_note_transfers', {
     id: {
       type: DataTypes.UUID,
@@ -397,9 +397,9 @@ const createCashNoteTransfersTable = async (queryInterface) => {
 /**
  * Add Phase 1 fields to users table
  */
-const addPhase1FieldsToUsers = async (queryInterface) => {
+const addPhase1FieldsToUsers = async(queryInterface) => {
   const tableDescription = await queryInterface.describeTable('users');
-  
+
   // Add Phase 1 specific fields if they don't exist
   const fieldsToAdd = [
     {
@@ -481,15 +481,15 @@ const addPhase1FieldsToUsers = async (queryInterface) => {
 /**
  * Run the Phase 1 migration
  */
-export const up = async () => {
+export const up = async() => {
   try {
     const queryInterface = sequelize.getQueryInterface();
-    
+
     logger.info('🚀 Starting Phase 1 Migration - Foundational Operations');
 
     // Check if tables already exist
     const existingTables = await queryInterface.showAllTables();
-    
+
     // Create cash_notes table
     if (!existingTables.includes('cash_notes')) {
       logger.info('📝 Creating cash_notes table...');
@@ -533,10 +533,10 @@ export const up = async () => {
 /**
  * Rollback the Phase 1 migration
  */
-export const down = async () => {
+export const down = async() => {
   try {
     const queryInterface = sequelize.getQueryInterface();
-    
+
     logger.info('⬇️ Rolling back Phase 1 Migration...');
 
     // Drop tables in reverse order (to handle foreign key constraints)
@@ -548,8 +548,8 @@ export const down = async () => {
 
     // Remove Phase 1 fields from users table
     const phase1Fields = [
-      'registration_phase', 'cash_notes_enabled', 'digital_wallet_enabled', 
-      'phase_1_completed_at', 'income_type', 'annual_income', 
+      'registration_phase', 'cash_notes_enabled', 'digital_wallet_enabled',
+      'phase_1_completed_at', 'income_type', 'annual_income',
       'tax_bracket', 'estimated_annual_tax', 'cash_holding_limit'
     ];
 
