@@ -142,34 +142,6 @@ User.init({
     type: DataTypes.BOOLEAN,
     defaultValue: true
   },
-  phone: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    validate: {
-      is: /^\+27\s\d{2}\s\d{3}\s\d{4}$/
-    }
-  },
-  alternativePhone: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    validate: {
-      is: /^\+27\s\d{2}\s\d{3}\s\d{4}$/
-    }
-  },
-  homeAddress: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    validate: {
-      isValidAddress(value) {
-        if (!value) return;
-        const required = ['streetAddress', 'town', 'city', 'province', 'postalCode'];
-        const missing = required.filter(field => !value[field]);
-        if (missing.length > 0) {
-          throw new Error(`Missing required address fields: ${missing.join(', ')}`);
-        }
-      }
-    }
-  },
   documents: {
     type: DataTypes.JSONB,
     allowNull: true
