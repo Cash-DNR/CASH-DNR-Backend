@@ -1,7 +1,7 @@
-// Test production registration endpoint
+// Test local registration endpoint
 import fetch from 'node-fetch';
 
-const testRegistration = async () => {
+const testLocalRegistration = async () => {
   try {
     const payload = {
       idNumber: '8012094321085',
@@ -19,10 +19,10 @@ const testRegistration = async () => {
       password: 'Testing400'
     };
 
-    console.log('📤 Sending registration request...');
+    console.log('📤 Testing LOCAL registration...');
     console.log('Payload:', JSON.stringify(payload, null, 2));
 
-    const response = await fetch('https://cash-dnr-backend.onrender.com/api/auth/citizen', {
+    const response = await fetch('http://localhost:3000/api/auth/citizen', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -31,7 +31,6 @@ const testRegistration = async () => {
     });
 
     console.log('\n📊 Response Status:', response.status);
-    console.log('Response Headers:', response.headers.raw());
 
     const data = await response.json();
     console.log('\n📄 Response Data:', JSON.stringify(data, null, 2));
@@ -40,13 +39,14 @@ const testRegistration = async () => {
       console.error('\n❌ Registration failed');
       console.error('Error details:', data);
     } else {
-      console.log('\n✅ Registration successful!');
+      console.log('\n✅ LOCAL Registration successful!');
+      console.log('Token:', data.data?.token?.substring(0, 50) + '...');
     }
 
   } catch (error) {
-    console.error('\n🚨 Error during registration test:', error.message);
+    console.error('\n🚨 Error during local registration test:', error.message);
     console.error('Stack:', error.stack);
   }
 };
 
-testRegistration();
+testLocalRegistration();

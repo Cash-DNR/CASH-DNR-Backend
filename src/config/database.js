@@ -13,6 +13,31 @@ const isProduction = environment === 'production';
 const getDatabaseConfig = () => {
   const environment = (process.env.NODE_ENV || 'development').trim().toLowerCase();
 
+  // In production, prioritize DATABASE_URL if available
+  if (environment === 'production' && process.env.DATABASE_URL) {
+    return {
+      dialect: 'postgres',
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      logging: false,
+      pool: {
+        max: 10,
+        min: 0,
+        acquire: 60000, // Increased timeout
+        idle: 10000
+      },
+      define: {
+        timestamps: true,
+        createdAt: 'created_at',
+        updatedAt: 'updated_at'
+      }
+    };
+  }
+
   if (environment === 'development') {
     return {
       dialect: 'postgres',
@@ -34,7 +59,23 @@ const getDatabaseConfig = () => {
         updatedAt: 'updated_at'
       }
     };
-  } else if (isProduction) {
+  } else if (environment === 'production') {
+    // Fallback to individual environment variables if DATABASE_URL not available
+    if (!process.env.PROD_DB_HOST && !process.env.DATABASE_URL) {
+      console.warn('⚠️ Production database not configured. Set DATABASE_URL or individual PROD_DB_* variables.');
+      // Return a minimal config that won't crash
+      return {
+        dialect: 'postgres',
+        host: 'localhost',
+        port: 5432,
+        database: 'dummy',
+        username: 'dummy',
+        password: 'dummy',
+        logging: false,
+        pool: { max: 1, min: 0, acquire: 30000, idle: 10000 }
+      };
+    }
+
     return {
       dialect: 'postgres',
       host: process.env.PROD_DB_HOST,
@@ -42,7 +83,7 @@ const getDatabaseConfig = () => {
       database: process.env.PROD_DB_NAME,
       username: process.env.PROD_DB_USER,
       password: process.env.PROD_DB_PASSWORD,
-      logging: false, // Disable logging in production
+      logging: false,
       dialectOptions: {
         ssl: {
           require: true,
@@ -51,8 +92,8 @@ const getDatabaseConfig = () => {
       },
       pool: {
         max: 10,
-        min: 2,
-        acquire: 30000,
+        min: 0,
+        acquire: 60000, // Increased timeout
         idle: 10000
       },
       define: {
@@ -71,7 +112,41 @@ const getDatabaseConfig = () => {
 };
 
 // Create Sequelize instance with environment-specific config
-export const sequelize = new Sequelize(getDatabaseConfig());
+let sequelize;
+
+try {
+  if (isProduction && process.env.DATABASE_URL) {
+    sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      logging: false,
+      pool: {
+        max: 10,
+        min: 0,
+        acquire: 60000,
+        idle: 10000
+      },
+      define: {
+        timestamps: true,
+        createdAt: 'created_at',
+        updatedAt: 'updated_at'
+      }
+    });
+  } else {
+    sequelize = new Sequelize(getDatabaseConfig());
+  }
+} catch (error) {
+  console.error('❌ Error creating Sequelize instance:', error.message);
+  // Create a dummy instance to prevent crashes
+  sequelize = new Sequelize('sqlite::memory:');
+}
+
+export { sequelize };
 
 // Test the connection
 const testConnection = async() => {

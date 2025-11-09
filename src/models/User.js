@@ -95,34 +95,6 @@ User.init({
       len: [1, 20]
     }
   },
-  home_address: {
-    type: DataTypes.TEXT,
-    allowNull: true,
-    get() {
-      const rawValue = this.getDataValue('home_address');
-      if (!rawValue) return null;
-      try {
-        return typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
-      } catch {
-        return null;
-      }
-    },
-    set(value) {
-      if (value && typeof value === 'object') {
-        // Validate structure
-        const requiredFields = ['streetAddress', 'town', 'city', 'province', 'postalCode'];
-        const missingFields = requiredFields.filter(field => !value[field] || value[field].trim() === '');
-        if (missingFields.length > 0) {
-          throw new Error(`Missing required address fields: ${missingFields.join(', ')}`);
-        }
-        this.setDataValue('home_address', JSON.stringify(value));
-      } else if (value === null || value === undefined) {
-        this.setDataValue('home_address', null);
-      } else {
-        this.setDataValue('home_address', value);
-      }
-    }
-  },
   phone_number: {
     type: DataTypes.STRING(20),
     allowNull: true,
@@ -142,14 +114,20 @@ User.init({
     type: DataTypes.BOOLEAN,
     defaultValue: true
   },
-  documents: {
+  homeAddress: {
     type: DataTypes.JSONB,
-    allowNull: true
-  },
-  documentStatus: {
-    type: DataTypes.ENUM,
-    values: Object.values(User.STATUS),
-    defaultValue: User.STATUS.PENDING_DETAILS
+    allowNull: true,
+    field: 'home_address', // Map to the actual database column name
+    validate: {
+      isValidAddress(value) {
+        if (!value) return;
+        const required = ['streetAddress', 'town', 'city', 'province', 'postalCode'];
+        const missing = required.filter(field => !value[field]);
+        if (missing.length > 0) {
+          throw new Error(`Missing required address fields: ${missing.join(', ')}`);
+        }
+      }
+    }
   }
 }, {
   sequelize,
