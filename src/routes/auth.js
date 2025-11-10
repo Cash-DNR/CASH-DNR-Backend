@@ -268,6 +268,19 @@ router.post('/citizen', async (req, res) => {
     // Extract date of birth from ID number
     const dateOfBirth = extractDateOfBirth(idNumber);
 
+    // Extract name information from Home Affairs response
+    let firstName, lastName;
+    if (verificationResult.citizen?.fullName) {
+      // Home Affairs API returns fullName - split it
+      const nameParts = verificationResult.citizen.fullName.trim().split(' ');
+      firstName = nameParts[0] || 'Unknown';
+      lastName = nameParts.slice(1).join(' ') || 'User';
+    } else {
+      // Fallback to separate firstName/lastName fields (for demo data)
+      firstName = verificationResult.data?.firstName || verificationResult.citizen?.firstName || 'Unknown';
+      lastName = verificationResult.data?.lastName || verificationResult.citizen?.lastName || 'User';
+    }
+
     // Create new user (password will be hashed by model hooks)
     const user = await User.create({
       id_number: idNumber,
@@ -275,8 +288,8 @@ router.post('/citizen', async (req, res) => {
       email: contactInfo.email,
       phone_number: contactInfo.phone || null,
       password_hash: password, // Pass plain password, model will hash it
-      first_name: verificationResult.data?.firstName || verificationResult.citizen?.firstName,
-      last_name: verificationResult.data?.lastName || verificationResult.citizen?.lastName,
+      first_name: firstName,
+      last_name: lastName,
       date_of_birth: dateOfBirth,
       gender: verificationResult.data?.gender || verificationResult.citizen?.gender,
       tax_number: taxNumber,
