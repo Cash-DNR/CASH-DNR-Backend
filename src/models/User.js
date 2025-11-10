@@ -84,8 +84,11 @@ User.init({
     allowNull: true
   },
   gender: {
-    type: DataTypes.ENUM('Male', 'Female'),
-    allowNull: true
+    type: DataTypes.CHAR(1), // Changed to CHAR(1) to match production database
+    allowNull: true,
+    validate: {
+      isIn: [['M', 'F']] // Only allow 'M' or 'F'
+    }
   },
   tax_number: {
     type: DataTypes.STRING(20),

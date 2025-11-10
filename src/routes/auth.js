@@ -292,6 +292,14 @@ router.post('/citizen', async (req, res) => {
       });
     }
 
+    // Convert gender from Home Affairs format to database format
+    const genderFromAPI = verificationResult.data?.gender || verificationResult.citizen?.gender;
+    let gender = null;
+    if (genderFromAPI) {
+      // Convert 'Male'/'Female' to 'M'/'F' for database
+      gender = genderFromAPI.charAt(0).toUpperCase(); // 'M' or 'F'
+    }
+
     // Create new user (password will be hashed by model hooks)
     const user = await User.create({
       id_number: idNumber,
@@ -302,7 +310,7 @@ router.post('/citizen', async (req, res) => {
       first_name: firstName,
       last_name: lastName,
       date_of_birth: dateOfBirth,
-      gender: verificationResult.data?.gender || verificationResult.citizen?.gender,
+      gender: gender, // Now using 'M' or 'F' instead of 'Male' or 'Female'
       tax_number: taxNumber,
       home_address: homeAddress,
       home_affairs_verified: true,
