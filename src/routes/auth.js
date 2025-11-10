@@ -560,12 +560,16 @@ router.post(
       // Persist uploaded files to DB linked to new user
       const mapCategory = (fieldname) => {
         const mapping = {
-          id_document: 'id_documents',
-          id_documents: 'id_documents',
+          id_document: 'id_document',
+          id_documents: 'id_document',
           proof_of_residence: 'proof_of_address',
           proof_of_address: 'proof_of_address',
-          bank_statement: 'bank_statements',
-          bank_statements: 'bank_statements',
+          bank_statement: 'bank_statement',
+          bank_statements: 'bank_statement',
+          tax_document: 'tax_document',
+          tax_documents: 'tax_document',
+          business_document: 'business_document',
+          business_documents: 'business_document',
           other_documents: 'other'
         };
         return mapping[fieldname] || 'other';
@@ -594,7 +598,7 @@ router.post(
       }
 
       // Determine if required docs provided to mark as verified
-      const requiredCategories = ['id_documents', 'proof_of_address', 'bank_statements'];
+      const requiredCategories = ['id_document', 'proof_of_address', 'bank_statement'];
       const present = new Set(created.map(c => c.fileType));
       if (requiredCategories.every(c => present.has(c))) {
         newUser.is_verified = true;

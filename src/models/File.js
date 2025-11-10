@@ -31,7 +31,7 @@ File.init({
     allowNull: false
   },
   file_type: {
-    type: DataTypes.ENUM('id_documents', 'proof_of_address', 'bank_statements', 'tax_documents', 'other'),
+    type: DataTypes.ENUM('id_document', 'proof_of_address', 'bank_statement', 'tax_document', 'business_document', 'other'),
     allowNull: false,
     defaultValue: 'other'
   },
