@@ -115,8 +115,9 @@ const fileUploadConfig = {
   parseNested: true
 };
 
+// Apply file upload middleware only to specific routes
+// NOTE: Do NOT apply to /api/auth/register-with-documents as it uses multer instead
 app.use('/api/upload', fileUpload(fileUploadConfig));
-app.use('/api/auth/register-with-documents', fileUpload(fileUploadConfig));
 
 // Multipart form validation and debugging middleware
 app.use((req, res, next) => {
@@ -151,12 +152,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// Basic middleware setup - after file upload middleware
-app.use(express.json({ limit: '50mb' })); // Increased from 10mb
-app.use(express.urlencoded({
-  extended: true,
-  limit: '50mb' // Increased from 10mb
-}));
+// Basic middleware setup - Skip body parsing for multipart routes (they use multer/express-fileupload)
+app.use((req, res, next) => {
+  // Skip JSON/URL body parsing for multipart form data
+  if (req.headers['content-type']?.includes('multipart/form-data')) {
+    return next();
+  }
+  
+  // Apply body parsers for non-multipart requests
+  express.json({ limit: '50mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  // Skip URL encoding for multipart form data
+  if (req.headers['content-type']?.includes('multipart/form-data')) {
+    return next();
+  }
+  
+  express.urlencoded({ extended: true, limit: '50mb' })(req, res, next);
+});
 
 // Other middleware
 app.use(helmet({
