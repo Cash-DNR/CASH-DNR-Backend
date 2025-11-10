@@ -305,7 +305,6 @@ router.post('/citizen', async (req, res) => {
       gender: verificationResult.data?.gender || verificationResult.citizen?.gender,
       tax_number: taxNumber,
       home_address: homeAddress,
-      status: User.STATUS?.PENDING_VERIFICATION || 'pending_verification',
       home_affairs_verified: true,
       is_active: true,
       is_verified: false
