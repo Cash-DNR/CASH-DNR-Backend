@@ -5,8 +5,8 @@ import fetch from 'node-fetch';
 // Default timeout for API requests (30 seconds for production)
 const API_TIMEOUT = 30000;
 
-// Base URL for the Home Affairs API
-const DEFAULT_API_URL = 'https://cash-dnr-api.onrender.com/home-affairs';
+// Base URL for the Home Affairs API (without trailing path)
+const DEFAULT_API_URL = 'https://cash-dnr-api.onrender.com';
 
 /**
  * Clean and validate South African ID number
