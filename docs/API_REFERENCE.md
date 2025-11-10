@@ -60,19 +60,19 @@ Content-Type: application/json
   "password": "..."
 }
 ```
-**Returns**: JWT token for immediate use
+**Returns**: JWT token + User ID for immediate use
 
 **Step 2 - Upload Documents (Later):**
 ```
-POST /api/upload/registration-documents  
+POST /api/users/{userId}/documents  
 Authorization: Bearer [JWT_TOKEN]
 Content-Type: multipart/form-data
 
-id_document=[FILE]
-proof_of_residence=[FILE]
-bank_statement=[FILE] (optional)
+idCopy=[FILE]
+proofOfResidence=[FILE]
+bankStatement=[FILE] (optional)
 ```
-**Result**: Account becomes verified with documents
+**Result**: Documents associated with user account
 
 ### Alternative: Single-Step Registration (Legacy)
 **Use Case**: Register and upload documents in one step (no immediate token)
@@ -151,52 +151,56 @@ proof_of_residence=[FILE]
 
 ### 2. Document Upload (Optional Second Step)
 
-**POST** `/api/upload/registration-documents`
+**POST** `/api/users/{userId}/documents`
 
 #### Request Format
 **Content-Type:** `multipart/form-data`
 **Authorization:** `Bearer [JWT_TOKEN]` *(from Step 1)*
 
+**URL Parameters:**
+```
+userId: [USER_ID] (from registration response)
+```
+
 **Required Fields:**
 ```
-id_document: [FILE] (PDF/Image - South African ID)
-proof_of_residence: [FILE] (PDF/Image - Utility bill, bank statement, etc.)
+idCopy: [FILE] (PDF/Image - South African ID)
+proofOfResidence: [FILE] (PDF/Image - Utility bill, bank statement, etc.)
 ```
 
 **Optional Fields:**
 ```
-bank_statement: [FILE] (PDF/Image)
-other_documents: [FILES] (Multiple files up to 20)
+bankStatement: [FILE] (PDF/Image)
+taxDocuments: [FILE] (PDF/Image)
 ```
 
 #### Success Response (200)
 ```json
 {
   "success": true,
-  "message": "Registration documents uploaded successfully",
+  "message": "Documents uploaded successfully",
   "data": {
-    "uploadedFiles": [
-      {
-        "fieldName": "id_document",
-        "originalName": "id_copy.pdf",
-        "storedName": "1762799863603-id-document.pdf",
-        "fileType": "id_document",
-        "fileId": "a3708a62-97bb-47ff-a31a-2e13ae3494c2"
-      },
-      {
-        "fieldName": "proof_of_residence", 
-        "originalName": "utility_bill.pdf",
-        "storedName": "1762799863603-proof-residence.pdf",
-        "fileType": "proof_of_address",
-        "fileId": "78d723ef-e9ed-4380-87e3-c19fb940e236"
-      }
-    ],
-    "userVerificationStatus": "pending_review",
-    "documentsReceived": {
-      "id_document": true,
-      "proof_of_residence": true,
-      "bank_statement": false
-    }
+    "documents": {
+      "idCopy": [
+        {
+          "filename": "1762799863603-id-document.pdf",
+          "originalName": "id_copy.pdf",
+          "mimetype": "application/pdf",
+          "size": 245760,
+          "uploadDate": "2025-01-10T14:30:45.123Z"
+        }
+      ],
+      "proofOfResidence": [
+        {
+          "filename": "1762799863603-proof-residence.pdf",
+          "originalName": "utility_bill.pdf",
+          "mimetype": "application/pdf",
+          "size": 189234,
+          "uploadDate": "2025-01-10T14:30:45.123Z"
+        }
+      ]
+    },
+    "status": "Pending Review"
   }
 }
 ```

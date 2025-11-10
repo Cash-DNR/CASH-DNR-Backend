@@ -19,6 +19,20 @@ import File from '../models/File.js';
 import smsService from '../services/smsService.js';
 import liveSMSService from '../services/liveSMSService.js';
 
+// Helper to map field names to file types (for File model)
+const fieldNameToFileType = (fieldname) => {
+  const mapping = {
+    id_document: 'id_document',
+    id_documents: 'id_document',
+    proof_of_residence: 'proof_of_address',
+    proof_of_address: 'proof_of_address', 
+    bank_statement: 'bank_statement',
+    bank_statements: 'bank_statement',
+    other_documents: 'other'
+  };
+  return mapping[fieldname] || 'other';
+};
+
 // In-memory OTP storage (in production, use Redis or database)
 const otpStorage = new Map();
 
@@ -176,41 +190,63 @@ const validateIdNumber = [
 ];
 
 /**
- * @route   POST /api/citizen
- * @desc    Register a new citizen
+ * @route   POST /api/auth/citizen
+ * @desc    Register a new citizen (with or without documents)
  * @access  Public
+ * @accepts application/json OR multipart/form-data
  */
-router.post('/citizen', async (req, res) => {
+router.post('/citizen', registrationUpload.fields([
+  { name: 'id_document', maxCount: 1 },
+  { name: 'proof_of_residence', maxCount: 1 },
+  { name: 'bank_statement', maxCount: 1 }
+]), async (req, res) => {
   try {
-    console.log('\n🔍 Request received:', {
+    console.log('\n🔍 Unified citizen registration request:', {
       method: req.method,
       contentType: req.headers['content-type'],
+      hasFiles: req.files && Object.keys(req.files).length > 0,
       body: req.body
     });
 
-    // Validate request content type
-    if (req.headers['content-type'] !== 'application/json') {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid content type',
-        message: 'Request must be application/json'
-      });
-    }
+    // Determine if this is JSON or multipart request
+    const isMultipart = req.headers['content-type']?.includes('multipart/form-data');
+    const hasFiles = req.files && Object.keys(req.files).length > 0;
 
-    // Extract fields from request body
-    const {
-      idNumber,
-      contactInfo,
-      homeAddress,
-      password
-    } = req.body;
+    console.log(`📝 Request mode: ${isMultipart ? 'Multipart' : 'JSON'} ${hasFiles ? 'with files' : 'without files'}`);
+
+    // Extract fields - works for both JSON and multipart
+    let idNumber, email, phone, password, homeAddress;
+    
+    if (isMultipart) {
+      // Multipart form data
+      idNumber = req.body.idNumber;
+      email = req.body.email;
+      phone = req.body.phoneNumber || req.body.phone;
+      password = req.body.password;
+      
+      // Handle address fields from multipart
+      homeAddress = {
+        streetAddress: req.body.streetAddress || req.body['homeAddress.streetAddress'],
+        town: req.body.town || req.body['homeAddress.town'],
+        city: req.body.city || req.body['homeAddress.city'],
+        province: req.body.province || req.body['homeAddress.province'],
+        postalCode: req.body.postalCode || req.body['homeAddress.postalCode']
+      };
+    } else {
+      // JSON request
+      const { contactInfo } = req.body;
+      idNumber = req.body.idNumber;
+      email = contactInfo?.email;
+      phone = contactInfo?.phone;
+      password = req.body.password;
+      homeAddress = req.body.homeAddress;
+    }
 
     // Validate required fields
     const missingFields = [];
-        
     if (!idNumber) missingFields.push('idNumber');
-    if (!contactInfo?.email) missingFields.push('contactInfo.email');
-    if (!contactInfo?.phone) missingFields.push('contactInfo.phone');
+    if (!email) missingFields.push('email');
+    if (!phone) missingFields.push('phone');
     if (!homeAddress?.streetAddress) missingFields.push('homeAddress.streetAddress');
     if (!homeAddress?.town) missingFields.push('homeAddress.town');
     if (!homeAddress?.city) missingFields.push('homeAddress.city');
@@ -222,10 +258,11 @@ router.post('/citizen', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
-        missingFields,
+        missing: missingFields,
         debug: {
           receivedFields: Object.keys(req.body),
-          contentType: req.headers['content-type']
+          contentType: req.headers['content-type'],
+          isMultipart
         }
       });
     }
@@ -235,7 +272,7 @@ router.post('/citizen', async (req, res) => {
       where: {
         [Op.or]: [
           { id_number: idNumber },
-          { email: contactInfo.email }
+          { email: email }
         ]
       }
     });
@@ -244,7 +281,7 @@ router.post('/citizen', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'User already registered',
-        details: existingUser.email === contactInfo.email ? 
+        details: existingUser.email === email ? 
           'Email already in use' : 'ID number already registered'
       });
     }
@@ -304,8 +341,8 @@ router.post('/citizen', async (req, res) => {
     const user = await User.create({
       id_number: idNumber,
       username,
-      email: contactInfo.email,
-      phone_number: contactInfo.phone || null,
+      email: email,
+      phone_number: phone || null,
       password_hash: password, // Pass plain password, model will hash it
       first_name: firstName,
       last_name: lastName,
@@ -315,8 +352,53 @@ router.post('/citizen', async (req, res) => {
       home_address: homeAddress,
       home_affairs_verified: true,
       is_active: true,
-      is_verified: false
+      is_verified: hasFiles // Mark as verified if documents were uploaded
     });
+
+    // Process uploaded files if any
+    let uploadedFiles = [];
+    if (hasFiles) {
+      console.log('📎 Processing uploaded files...');
+      
+      for (const [fieldName, files] of Object.entries(req.files)) {
+        for (const file of files) {
+          const { originalname, filename, path: filePath, mimetype, size } = file;
+          const fileTypeForDb = fieldNameToFileType(fieldName);
+
+          try {
+            const fileRecord = await File.create({
+              original_name: originalname,
+              stored_name: filename,
+              file_path: filePath,
+              mime_type: mimetype,
+              file_size: size,
+              file_type: fileTypeForDb,
+              user_id: user.id,
+              metadata: {
+                uploadedAt: new Date().toISOString(),
+                uploadedDuring: 'registration',
+                userAgent: req.get('User-Agent'),
+                ipAddress: req.ip,
+                fieldname: fieldName
+              }
+            });
+
+            uploadedFiles.push({
+              id: fileRecord.id,
+              originalName: originalname,
+              storedName: filename,
+              fileType: fileTypeForDb,
+              fieldName
+            });
+          } catch (fileError) {
+            logger.error(`❌ Failed to save file ${originalname}:`, fileError);
+            // Continue processing other files
+          }
+        }
+      }
+      
+      console.log(`✅ Processed ${uploadedFiles.length} file(s)`);
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -330,7 +412,9 @@ router.post('/citizen', async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Citizen registered successfully',
+      message: hasFiles ? 
+        'Citizen registered successfully with documents' : 
+        'Citizen registered successfully',
       data: {
         user: {
           id: user.id,
@@ -354,7 +438,14 @@ router.post('/citizen', async (req, res) => {
         registrationComplete: !!user.phone_number,
         missingInfo: {
           phoneNumber: !user.phone_number
-        }
+        },
+        ...(hasFiles && {
+          documents: {
+            uploaded: uploadedFiles,
+            count: uploadedFiles.length,
+            verificationStatus: 'pending_review'
+          }
+        })
       }
     });
 
