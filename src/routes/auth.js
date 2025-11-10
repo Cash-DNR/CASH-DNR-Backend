@@ -268,17 +268,28 @@ router.post('/citizen', async (req, res) => {
     // Extract date of birth from ID number
     const dateOfBirth = extractDateOfBirth(idNumber);
 
-    // Extract name information from Home Affairs response
-    let firstName, lastName;
-    if (verificationResult.citizen?.fullName) {
-      // Home Affairs API returns fullName - split it
-      const nameParts = verificationResult.citizen.fullName.trim().split(' ');
-      firstName = nameParts[0] || 'Unknown';
-      lastName = nameParts.slice(1).join(' ') || 'User';
-    } else {
-      // Fallback to separate firstName/lastName fields (for demo data)
-      firstName = verificationResult.data?.firstName || verificationResult.citizen?.firstName || 'Unknown';
-      lastName = verificationResult.data?.lastName || verificationResult.citizen?.lastName || 'User';
+    // Extract name information from Home Affairs API response
+    if (!verificationResult.citizen?.fullName) {
+      logger.error('❌ Invalid Home Affairs API response - missing fullName');
+      return res.status(500).json({
+        success: false,
+        message: 'Invalid verification data received',
+        details: 'Home Affairs API response is missing required citizen name information'
+      });
+    }
+
+    // Parse the fullName from Home Affairs API
+    const nameParts = verificationResult.citizen.fullName.trim().split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || 'Unknown';
+
+    if (!firstName || firstName === '') {
+      logger.error('❌ Invalid name data from Home Affairs API');
+      return res.status(500).json({
+        success: false,
+        message: 'Invalid name data received',
+        details: 'Unable to extract valid name from Home Affairs verification'
+      });
     }
 
     // Create new user (password will be hashed by model hooks)
