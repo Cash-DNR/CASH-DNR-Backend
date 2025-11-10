@@ -576,13 +576,13 @@ router.post(
       for (const f of allFiles) {
         const rec = await File.create({
           original_name: f.originalname,
-          file_name: f.filename,
+          stored_name: f.filename,
           file_path: f.path,
           mime_type: f.mimetype,
           file_size: f.size,
-          file_category: mapCategory(f.fieldname),
+          file_type: mapCategory(f.fieldname),
           user_id: newUser.id,
-          upload_status: 'completed',
+          is_verified: false,
           metadata: {
             uploadedAt: new Date().toISOString(),
             userAgent: req.get('User-Agent'),
@@ -590,12 +590,12 @@ router.post(
             fieldname: f.fieldname
           }
         });
-        created.push({ id: rec.id, originalName: rec.original_name, fileName: rec.file_name, category: rec.file_category });
+        created.push({ id: rec.id, originalName: rec.original_name, storedName: rec.stored_name, fileType: rec.file_type });
       }
 
       // Determine if required docs provided to mark as verified
       const requiredCategories = ['id_documents', 'proof_of_address', 'bank_statements'];
-      const present = new Set(created.map(c => c.category));
+      const present = new Set(created.map(c => c.fileType));
       if (requiredCategories.every(c => present.has(c))) {
         newUser.is_verified = true;
         await newUser.save();

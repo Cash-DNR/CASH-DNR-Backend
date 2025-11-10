@@ -14,7 +14,7 @@ File.init({
     type: DataTypes.STRING(255),
     allowNull: false
   },
-  file_name: {
+  stored_name: {
     type: DataTypes.STRING(255),
     allowNull: false
   },
@@ -27,22 +27,22 @@ File.init({
     allowNull: false
   },
   file_size: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.INTEGER,
     allowNull: false
   },
-  file_category: {
+  file_type: {
     type: DataTypes.ENUM('id_documents', 'proof_of_address', 'bank_statements', 'tax_documents', 'other'),
     allowNull: false,
     defaultValue: 'other'
   },
   description: {
-    type: DataTypes.STRING(500),
+    type: DataTypes.TEXT,
     allowNull: true
   },
-  upload_status: {
-    type: DataTypes.ENUM('pending', 'completed', 'failed'),
-    allowNull: false,
-    defaultValue: 'completed'
+  is_verified: {
+    type: DataTypes.BOOLEAN,
+    allowNull: true,
+    defaultValue: false
   },
   metadata: {
     type: DataTypes.JSONB,
@@ -51,6 +51,10 @@ File.init({
   user_id: {
     type: DataTypes.UUID,
     allowNull: false
+  },
+  business_id: {
+    type: DataTypes.UUID,
+    allowNull: true
   }
 }, {
   sequelize,
