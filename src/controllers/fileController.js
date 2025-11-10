@@ -26,15 +26,15 @@ const createCategoryDirs = () => {
 
 createCategoryDirs();
 
-// Helper to map field names to categories
-const fieldNameToCategory = (fieldname) => {
+// Helper to map field names to file types (for File model)
+const fieldNameToFileType = (fieldname) => {
   const mapping = {
-    id_document: 'id_documents',
-    id_documents: 'id_documents',
+    id_document: 'id_document',
+    id_documents: 'id_document',
     proof_of_residence: 'proof_of_address',
-    proof_of_address: 'proof_of_address',
-    bank_statement: 'bank_statements',
-    bank_statements: 'bank_statements',
+    proof_of_address: 'proof_of_address', 
+    bank_statement: 'bank_statement',
+    bank_statements: 'bank_statement',
     other_documents: 'other'
   };
   return mapping[fieldname] || 'other';
@@ -43,8 +43,8 @@ const fieldNameToCategory = (fieldname) => {
 // Multer configuration with 400MB limit
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const derivedCategory = fieldNameToCategory(file.fieldname);
-    const category = req.body.category || derivedCategory || 'other';
+    const derivedFileType = fieldNameToFileType(file.fieldname);
+    const category = fieldNameToCategory(file.fieldname); // For file system path
     const categoryDir = path.join(uploadsDir, category);
     
     // Ensure category directory exists
@@ -266,17 +266,16 @@ export const uploadRegistrationDocuments = async (req, res) => {
     const created = [];
     for (const file of allFiles) {
       const { originalname, filename, path: filePath, mimetype, size, fieldname } = file;
-      const categoryForFile = fieldNameToCategory(fieldname);
+      const fileType = fieldNameToFileType(fieldname);
 
       const record = await File.create({
         original_name: originalname,
-        file_name: filename,
+        stored_name: filename,
         file_path: filePath,
         mime_type: mimetype,
         file_size: size,
-        file_category: categoryForFile,
+        file_type: fileType,
         user_id: req.user.id,
-        upload_status: 'completed',
         metadata: {
           uploadedAt: new Date().toISOString(),
           userAgent: req.get('User-Agent'),
@@ -288,40 +287,37 @@ export const uploadRegistrationDocuments = async (req, res) => {
       created.push({
         id: record.id,
         originalName: record.original_name,
-        fileName: record.file_name,
-        category: record.file_category
+        storedName: record.stored_name,
+        fileType: record.file_type
       });
     }
 
     // Check required documents presence
-    const requiredCategories = ['id_documents', 'proof_of_address', 'bank_statements'];
-    const counts = {};
-    for (const cat of requiredCategories) {
-      counts[cat] = await File.count({ where: { user_id: req.user.id, file_category: cat } });
+    const requiredFileTypes = ['id_document', 'proof_of_address'];
+    const userFiles = await File.findAll({ 
+      where: { user_id: req.user.id },
+      attributes: ['file_type']
+    });
+    
+    const userFileTypes = userFiles.map(f => f.file_type);
+    const hasRequiredDocs = requiredFileTypes.every(type => userFileTypes.includes(type));
+
+    // Update user verification status if they now have required documents
+    if (hasRequiredDocs && !req.user.is_verified) {
+      await req.user.update({ is_verified: true });
     }
 
-    let verificationUpdated = false;
-    if (requiredCategories.every(cat => (counts[cat] || 0) > 0)) {
-      if (!req.user.is_verified) {
-        req.user.is_verified = true;
-        await req.user.save();
-        verificationUpdated = true;
-      }
-    }
-
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: verificationUpdated
-        ? 'Documents uploaded and registration completed'
-        : 'Documents uploaded. Awaiting remaining required documents',
+      message: 'Registration documents uploaded successfully',
       data: {
-        uploaded: created,
-        requirements: {
-          id_documents: counts.id_documents || 0,
-          proof_of_address: counts.proof_of_address || 0,
-          bank_statements: counts.bank_statements || 0
-        },
-        isVerified: req.user.is_verified
+        uploadedFiles: created,
+        userVerificationStatus: hasRequiredDocs ? 'verified' : 'pending_review',
+        documentsReceived: {
+          id_document: userFileTypes.includes('id_document'),
+          proof_of_address: userFileTypes.includes('proof_of_address'),
+          bank_statement: userFileTypes.includes('bank_statement')
+        }
       }
     });
   } catch (error) {

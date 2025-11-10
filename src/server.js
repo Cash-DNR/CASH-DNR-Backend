@@ -116,41 +116,41 @@ const fileUploadConfig = {
 };
 
 // Apply file upload middleware only to specific routes
-// NOTE: Do NOT apply to /api/auth/register-with-documents as it uses multer instead
-app.use('/api/upload', fileUpload(fileUploadConfig));
+// NOTE: Do NOT apply to /api/upload routes as they use multer instead
+// app.use('/api/upload', fileUpload(fileUploadConfig)); // DISABLED - conflicts with multer
 
-// Multipart form validation and debugging middleware
-app.use((req, res, next) => {
-  if (req.method === 'POST' && req.headers['content-type']?.includes('multipart/form-data')) {
-    console.log('📝 Processing multipart form data:', {
-      contentLength: req.headers['content-length'],
-      boundary: req.headers['content-type'].includes('boundary=') ? 'present' : 'missing',
-      fields: req.body,
-      files: req.files ? Object.keys(req.files) : []
-    });
+// Multipart form validation and debugging middleware - DISABLED to prevent conflicts with multer
+// app.use((req, res, next) => {
+//   if (req.method === 'POST' && req.headers['content-type']?.includes('multipart/form-data')) {
+//     console.log('📝 Processing multipart form data:', {
+//       contentLength: req.headers['content-length'],
+//       boundary: req.headers['content-type'].includes('boundary=') ? 'present' : 'missing',
+//       fields: req.body,
+//       files: req.files ? Object.keys(req.files) : []
+//     });
 
-    // Validate that the multipart request has proper boundary
-    const contentType = req.headers['content-type'];
-    if (!contentType.includes('boundary=')) {
-      return res.status(400).json({
-        error: 'Invalid multipart format',
-        message: 'Multipart form data is missing boundary parameter',
-        code: 'MISSING_BOUNDARY'
-      });
-    }
+//     // Validate that the multipart request has proper boundary
+//     const contentType = req.headers['content-type'];
+//     if (!contentType.includes('boundary=')) {
+//       return res.status(400).json({
+//         error: 'Invalid multipart format',
+//         message: 'Multipart form data is missing boundary parameter',
+//         code: 'MISSING_BOUNDARY'
+//       });
+//     }
 
-    // Check content length
-    const contentLength = parseInt(req.headers['content-length'] || '0');
-    if (contentLength === 0) {
-      return res.status(400).json({
-        error: 'Empty upload',
-        message: 'No data received in the upload request',
-        code: 'EMPTY_UPLOAD'
-      });
-    }
-  }
-  next();
-});
+//     // Check content length
+//     const contentLength = parseInt(req.headers['content-length'] || '0');
+//     if (contentLength === 0) {
+//       return res.status(400).json({
+//         error: 'Empty upload',
+//         message: 'No data received in the upload request',
+//         code: 'EMPTY_UPLOAD'
+//       });
+//     }
+//   }
+//   next();
+// });
 
 // Basic middleware setup - Skip body parsing for multipart routes (they use multer/express-fileupload)
 app.use((req, res, next) => {
