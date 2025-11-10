@@ -487,17 +487,34 @@ router.post(
         return res.status(400).json({
           success: false,
           message: 'ID verification failed',
-          details: idVerificationResult.message
+          details: idVerificationResult.error || idVerificationResult.message
         });
       }
 
-      const homeAffairsData = idVerificationResult.data?.homeAffairsData;
-      if (!homeAffairsData || !homeAffairsData.firstName || !homeAffairsData.lastName) {
-        return res.status(400).json({ success: false, message: 'Incomplete personal details from Home Affairs' });
+      // Extract and validate citizen data from Home Affairs API
+      const citizenData = idVerificationResult.citizen;
+      if (!citizenData || !citizenData.fullName) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Incomplete personal details from Home Affairs',
+          details: 'Missing fullName in verification response'
+        });
+      }
+
+      // Parse fullName from Home Affairs API (same logic as citizen registration)
+      const nameParts = citizenData.fullName.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ') || 'Unknown';
+
+      if (!firstName || firstName === '') {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid name data received from Home Affairs' 
+        });
       }
 
       // Build unique username
-      const baseUsername = `${homeAffairsData.firstName.toLowerCase()}.${homeAffairsData.lastName.toLowerCase()}`;
+      const baseUsername = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
       let username = baseUsername;
       let counter = 1;
       while (await User.findOne({ where: { username } })) {
@@ -508,8 +525,18 @@ router.post(
       // Password hash
       const passwordHash = await bcrypt.hash(password, 12);
 
+      // Extract date of birth from ID number
+      const dateOfBirth = extractDateOfBirth(idNumber);
+
+      // Convert gender from Home Affairs format ('Male'/'Female') to database format ('M'/'F')
+      const genderFromAPI = citizenData.gender;
+      let gender = null;
+      if (genderFromAPI) {
+        gender = genderFromAPI.charAt(0).toUpperCase(); // 'M' or 'F'
+      }
+
       // Tax number
-      let taxNumber = homeAffairsData.taxNumber || homeAffairsData.taxId;
+      let taxNumber = citizenData.taxNumber || citizenData.taxId;
       if (!taxNumber) taxNumber = generateTaxNumber(idNumber);
 
       // Create user first
@@ -517,11 +544,11 @@ router.post(
         username,
         email,
         password_hash: passwordHash,
-        first_name: homeAffairsData.firstName,
-        last_name: homeAffairsData.lastName,
+        first_name: firstName,
+        last_name: lastName,
         id_number: idNumber,
-        date_of_birth: homeAffairsData.dateOfBirth,
-        gender: homeAffairsData.gender,
+        date_of_birth: dateOfBirth,
+        gender: gender,
         tax_number: taxNumber,
         home_address: homeAddress || null,
         phone_number: phoneNumber || null,
