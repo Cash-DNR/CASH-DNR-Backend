@@ -23,6 +23,7 @@ import cashNotesRoutes from './routes/cashNotes.js';
 // import chatRoutes from './routes/chat.js'; // Disabled - chat functionality removed
 import notificationsRoutes from './routes/notifications.js';
 import realtimeRoutes from './routes/realtime.js';
+import debugRoutes from './routes/debug.js';
 
 // Import database configuration
 import './config/database.js';
@@ -244,6 +245,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/debug', debugRoutes);
 // Phase 1 - Cash Notes API
 app.use('/api/cash-notes', cashNotesRoutes);
 
