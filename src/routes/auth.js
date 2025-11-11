@@ -13,25 +13,11 @@ import { verifyIdWithHomeAffairs } from '../services/homeAffairs.js';
 import { sarsComplianceChecker, generateTaxNumber } from '../services/SARS.js';
 import TaxNumberGenerationService from '../services/taxNumberGenerationService.js';
 import logger from '../services/logger.js';
-import { upload as registrationUpload } from '../controllers/fileController.js';
+import { registrationUpload, handleMulterError, getFileType } from '../controllers/newMulterConfig.js';
 import File from '../models/File.js';
 
 import smsService from '../services/smsService.js';
 import liveSMSService from '../services/liveSMSService.js';
-
-// Helper to map field names to file types (for File model)
-const fieldNameToFileType = (fieldname) => {
-  const mapping = {
-    id_document: 'id_document',
-    id_documents: 'id_document',
-    proof_of_residence: 'proof_of_address',
-    proof_of_address: 'proof_of_address', 
-    bank_statement: 'bank_statement',
-    bank_statements: 'bank_statement',
-    other_documents: 'other'
-  };
-  return mapping[fieldname] || 'other';
-};
 
 // In-memory OTP storage (in production, use Redis or database)
 const otpStorage = new Map();
@@ -195,11 +181,7 @@ const validateIdNumber = [
  * @access  Public
  * @accepts application/json OR multipart/form-data
  */
-router.post('/citizen', registrationUpload.fields([
-  { name: 'idDocument', maxCount: 1 },
-  { name: 'proofOfResidence', maxCount: 1 },
-  { name: 'bankStatement', maxCount: 1 }
-]), async (req, res) => {
+router.post('/citizen', registrationUpload, handleMulterError, async (req, res) => {
   try {
     console.log('\n🔍 Unified citizen registration request:', {
       method: req.method,
@@ -363,7 +345,7 @@ router.post('/citizen', registrationUpload.fields([
       for (const [fieldName, files] of Object.entries(req.files)) {
         for (const file of files) {
           const { originalname, filename, path: filePath, mimetype, size } = file;
-          const fileTypeForDb = fieldNameToFileType(fieldName);
+          const fileTypeForDb = getFileType(fieldName);
 
           try {
             const fileRecord = await File.create({

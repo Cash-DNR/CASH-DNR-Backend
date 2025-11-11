@@ -49,7 +49,7 @@ async function testDebugEndpoint() {
     const options = {
         hostname: 'cash-dnr-backend.onrender.com',
         port: 443,
-        path: '/api/debug/multipart',
+        path: '/api/debug/debug-multipart',
         method: 'POST',
         headers: form.getHeaders()
     };
