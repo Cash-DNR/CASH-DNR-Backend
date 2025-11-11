@@ -30,10 +30,13 @@ createCategoryDirs();
 const fieldNameToFileType = (fieldname) => {
   const mapping = {
     id_document: 'id_document',
+    idDocument: 'id_document',
     id_documents: 'id_document',
     proof_of_residence: 'proof_of_address',
+    proofOfResidence: 'proof_of_address',
     proof_of_address: 'proof_of_address', 
     bank_statement: 'bank_statement',
+    bankStatement: 'bank_statement',
     bank_statements: 'bank_statement',
     other_documents: 'other'
   };

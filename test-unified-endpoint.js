@@ -88,8 +88,8 @@ async function testUnifiedRegistration() {
     formData.append('password', 'TestPassword123!');
     
     // Add files
-    formData.append('id_document', fs.createReadStream(path.join(testFilesDir, 'id_document.pdf')), 'id_document.pdf');
-    formData.append('proof_of_residence', fs.createReadStream(path.join(testFilesDir, 'proof_of_residence.pdf')), 'proof_of_residence.pdf');
+    formData.append('idDocument', fs.createReadStream(path.join(testFilesDir, 'id_document.pdf')), 'id_document.pdf');
+    formData.append('proofOfResidence', fs.createReadStream(path.join(testFilesDir, 'proof_of_residence.pdf')), 'proof_of_residence.pdf');
 
     const multipartResponse = await fetch(`${BASE_URL}/api/auth/citizen`, {
       method: 'POST',

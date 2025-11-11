@@ -152,10 +152,11 @@ const fileUploadConfig = {
 //   next();
 // });
 
-// Basic middleware setup - Skip body parsing for multipart routes (they use multer/express-fileupload)
+// Basic middleware setup - Skip body parsing for routes that handle their own multipart parsing
 app.use((req, res, next) => {
-  // Skip JSON/URL body parsing for multipart form data
+  // Skip JSON/URL body parsing for multipart form data on specific routes that use multer
   if (req.headers['content-type']?.includes('multipart/form-data')) {
+    // Let routes that use multer (like /api/auth/citizen) handle their own parsing
     return next();
   }
   
@@ -164,8 +165,9 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  // Skip URL encoding for multipart form data
+  // Skip URL encoding for multipart form data on specific routes that use multer
   if (req.headers['content-type']?.includes('multipart/form-data')) {
+    // Let routes that use multer handle their own parsing
     return next();
   }
   

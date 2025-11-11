@@ -196,9 +196,9 @@ const validateIdNumber = [
  * @accepts application/json OR multipart/form-data
  */
 router.post('/citizen', registrationUpload.fields([
-  { name: 'id_document', maxCount: 1 },
-  { name: 'proof_of_residence', maxCount: 1 },
-  { name: 'bank_statement', maxCount: 1 }
+  { name: 'idDocument', maxCount: 1 },
+  { name: 'proofOfResidence', maxCount: 1 },
+  { name: 'bankStatement', maxCount: 1 }
 ]), async (req, res) => {
   try {
     console.log('\n🔍 Unified citizen registration request:', {
