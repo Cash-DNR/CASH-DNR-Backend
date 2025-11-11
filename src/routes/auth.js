@@ -13,7 +13,7 @@ import { verifyIdWithHomeAffairs } from '../services/homeAffairs.js';
 import { sarsComplianceChecker, generateTaxNumber } from '../services/SARS.js';
 import TaxNumberGenerationService from '../services/taxNumberGenerationService.js';
 import logger from '../services/logger.js';
-import { registrationUpload, handleMulterError, getFileType } from '../controllers/newMulterConfig.js';
+import { registrationUpload, handleMulterError, getFileType, freshMulter } from '../controllers/newMulterConfig.js';
 import File from '../models/File.js';
 
 import smsService from '../services/smsService.js';
@@ -502,7 +502,7 @@ router.post('/test-upload', async (req, res) => {
  */
 router.post(
   '/register-with-documents',
-  registrationUpload.fields([
+  freshMulter.fields([
     { name: 'id_document', maxCount: 5 },
     { name: 'proof_of_residence', maxCount: 5 },
     { name: 'bank_statement', maxCount: 5 },
