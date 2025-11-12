@@ -1,5 +1,7 @@
 # Transaction Logs & Tax Tagging System Documentation
 
+> 📚 **For basic API setup and authentication, see [README.md](../README.md)**
+
 ## Overview
 This document provides comprehensive documentation for the transaction logging and tax tagging system implemented in the CASH-DNR Backend. The system provides automated tax classification, detailed audit trails, and comprehensive logging for all transaction-related activities.
 

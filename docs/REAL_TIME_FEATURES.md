@@ -1,5 +1,7 @@
 # 🚀 Real-time Features Documentation
 
+> 📚 **For basic API setup and authentication, see [README.md](../README.md)**
+
 ## Overview
 The CASH-DNR backend now includes comprehensive real-time features for notifications, balance updates, cash note transfers, and activity feeds using Socket.IO WebSockets.
 

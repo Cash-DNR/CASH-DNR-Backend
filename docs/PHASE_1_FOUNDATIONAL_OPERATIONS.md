@@ -1,5 +1,7 @@
 # 🚀 Phase 1 - Foundational Operations Documentation
 
+> 📚 **For API overview and quick start, see [README.md](../README.md)**
+
 ## Overview
 
 **Phase 1** of the CASH-DNR system implements the core foundational operations that enable digital tracking and transfer of physical cash notes. This phase establishes the essential infrastructure for cash note management, user registration with Home Affairs verification, and automatic tax number generation.

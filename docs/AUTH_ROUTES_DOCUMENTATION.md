@@ -1,7 +1,15 @@
 # Authentication Routes Documentation
 
+> 📚 **For basic API overview and quick start guide, see [README.md](../README.md)**
+
 ## Overview
-This document provides comprehensive documentation for all authentication routes in the CASH-DNR Backend system. The authentication system includes user registration, login with OTP verification, and various utility endpoints.
+This document provides **detailed technical documentation** for authentication routes in the CASH-DNR Backend system. For basic API usage and integration examples, refer to the main README file.
+
+This documentation focuses on:
+- Advanced authentication configuration
+- Detailed error codes and responses
+- Security implementation details
+- Technical troubleshooting guides
 
 ## Base URL
 **Production**: `https://cash-dnr-backend.onrender.com/api/auth`
