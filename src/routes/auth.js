@@ -905,7 +905,7 @@ router.post('/login/verify-credentials', [
         expiresIn: 60, // seconds
         provider: smsResult.provider,
         messageId: smsResult.messageId,
-        // Include OTP for testing in mock mode OR console mode
+        // Include OTP for testing in mock mode OR console mode OR development environment
         ...(smsResult.provider === 'mock' && { 
           testOTP: smsResult.otp,
           note: 'OTP included for testing purposes only'
@@ -913,6 +913,11 @@ router.post('/login/verify-credentials', [
         ...(smsResult.provider === 'console' && { 
           testOTP: otp,
           note: 'OTP displayed in console and included in response for testing'
+        }),
+        // Always include OTP in development mode for easier testing
+        ...(process.env.NODE_ENV === 'development' && { 
+          devOTP: otp,
+          devNote: '🔧 OTP included in response for development testing - DO NOT USE IN PRODUCTION'
         })
       }
     });
