@@ -130,6 +130,12 @@ async function runLoginTest() {
         if (credentialsData.provider) {
             console.log(`   • SMS Provider: ${credentialsData.provider}`);
         }
+        if (credentialsData.testOTP) {
+            console.log('\n🎯 === OTP FOR TESTING ===');
+            console.log(`🔢 OTP CODE: ${credentialsData.testOTP}`);
+            console.log(`📝 Note: ${credentialsData.note || 'Use this OTP to complete login'}`);
+            console.log('🎯 =========================');
+        }
 
         console.log('\n🎯 LOGIN FLOW TEST RESULTS:');
         console.log('✅ Email validation step: WORKING');

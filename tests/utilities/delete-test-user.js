@@ -1,7 +1,7 @@
 // Delete test users from database
-import { sequelize } from './src/config/database.js';
-import User from './src/models/User.js';
-import File from './src/models/File.js';
+import { sequelize } from '../../src/config/database.js';
+import User from '../../src/models/User.js';
+import File from '../../src/models/File.js';
 
 // Test ID numbers to look for and delete
 const testIdNumbers = [

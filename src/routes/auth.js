@@ -905,10 +905,14 @@ router.post('/login/verify-credentials', [
         expiresIn: 60, // seconds
         provider: smsResult.provider,
         messageId: smsResult.messageId,
-        // Include OTP only in mock mode for testing
+        // Include OTP for testing in mock mode OR console mode
         ...(smsResult.provider === 'mock' && { 
           testOTP: smsResult.otp,
           note: 'OTP included for testing purposes only'
+        }),
+        ...(smsResult.provider === 'console' && { 
+          testOTP: otp,
+          note: 'OTP displayed in console and included in response for testing'
         })
       }
     });

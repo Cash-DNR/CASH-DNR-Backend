@@ -23,6 +23,9 @@ class SMSService {
     case 'vonage':
       this.initVonage();
       break;
+    case 'console':
+      logger.info('✅ Console SMS provider initialized - OTPs will be displayed in console');
+      break;
     default:
       logger.warn(`Unknown SMS provider: ${this.provider}. Falling back to mock mode.`);
       this.provider = 'mock';
